@@ -1,5 +1,5 @@
 import type { Database } from '../../src/db/client.js';
-import { doctorProfiles, users } from '../../src/db/schema.js';
+import { doctorLeaves, doctorProfiles, doctorWorkingHours, users } from '../../src/db/schema.js';
 import { slotOf, type TimeRange } from '../../src/db/types/time-range.js';
 
 let sequence = 0;
@@ -36,7 +36,12 @@ export async function createPatient(
 
 export async function createDoctor(
   database: Database,
-  overrides: { specialization?: string; slotDurationMins?: number } = {},
+  overrides: {
+    specialization?: string;
+    slotDurationMins?: number;
+    timezone?: string;
+    isActive?: boolean;
+  } = {},
 ): Promise<string> {
   const suffix = nextSuffix();
   const [user] = await database.db
@@ -46,6 +51,8 @@ export async function createDoctor(
       passwordHash: 'not-a-real-hash',
       role: 'doctor',
       fullName: `Doctor ${suffix}`,
+      isActive: overrides.isActive,
+      ...(overrides.timezone ? { timezone: overrides.timezone } : {}),
     })
     .returning({ id: users.id });
 
@@ -60,6 +67,30 @@ export async function createDoctor(
   });
 
   return user.id;
+}
+
+export interface ShiftFixture {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
+export async function addWorkingHours(
+  database: Database,
+  doctorId: string,
+  shifts: readonly ShiftFixture[],
+): Promise<void> {
+  await database.db
+    .insert(doctorWorkingHours)
+    .values(shifts.map((shift) => ({ doctorId, ...shift })));
+}
+
+export async function addLeaveDay(
+  database: Database,
+  doctorId: string,
+  leaveDate: string,
+): Promise<void> {
+  await database.db.insert(doctorLeaves).values({ doctorId, leaveDate });
 }
 
 /**

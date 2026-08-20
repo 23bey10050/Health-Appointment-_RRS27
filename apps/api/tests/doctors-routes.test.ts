@@ -1,0 +1,424 @@
+import type { AvailabilityResponse, Doctor, ListDoctorsResponse } from '@health/contracts';
+import type { FastifyInstance } from 'fastify';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import type { Database } from '../src/db/client.js';
+
+import { createTestDatabase, resetDatabase } from './helpers/database.js';
+import { addWorkingHours, createDoctor } from './helpers/fixtures.js';
+import { createUserWithToken } from './helpers/roles.js';
+import { buildTestServer } from './helpers/test-server.js';
+
+let database: Database;
+let app: FastifyInstance;
+let adminToken: string;
+let patientToken: string;
+let doctorToken: string;
+
+beforeAll(() => {
+  database = createTestDatabase();
+});
+
+afterAll(async () => {
+  await database.close();
+});
+
+beforeEach(async () => {
+  await resetDatabase(database);
+  app = await buildTestServer({ db: database });
+  adminToken = (await createUserWithToken(database, 'admin')).token;
+  patientToken = (await createUserWithToken(database, 'patient')).token;
+  doctorToken = (await createUserWithToken(database, 'doctor')).token;
+});
+
+afterEach(async () => {
+  await app.close();
+});
+
+function authed(token: string) {
+  return { authorization: `Bearer ${token}` };
+}
+
+const newDoctorPayload = {
+  email: 'newdoc@clinic.test',
+  password: 'a perfectly good passphrase',
+  fullName: 'Dr New Comer',
+  specialization: 'Pediatrics',
+};
+
+describe('admin doctor management, role boundary', () => {
+  it.each([
+    ['patient', () => patientToken],
+    ['doctor', () => doctorToken],
+  ])('blocks a %s from creating a doctor, with 403', async (_label, getToken) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      headers: authed(getToken()),
+      payload: newDoctorPayload,
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('rejects an unauthenticated request with 401, before any role check', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      payload: newDoctorPayload,
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('lets an admin create a doctor', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      headers: authed(adminToken),
+      payload: newDoctorPayload,
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json<Doctor>();
+    expect(body).toMatchObject({
+      fullName: 'Dr New Comer',
+      specialization: 'Pediatrics',
+      isActive: true,
+    });
+    expect(body.workingHours).toEqual([]);
+  });
+});
+
+describe('POST /admin/doctors validation', () => {
+  it('rejects a password below the shared minimum', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      headers: authed(adminToken),
+      payload: { ...newDoctorPayload, password: 'short' },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rejects a missing specialization', async () => {
+    const { specialization: _specialization, ...withoutSpecialization } = newDoctorPayload;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      headers: authed(adminToken),
+      payload: withoutSpecialization,
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rejects a working hour where the end is not after the start', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      headers: authed(adminToken),
+      payload: {
+        ...newDoctorPayload,
+        workingHours: [{ dayOfWeek: 1, startTime: '12:00', endTime: '09:00' }],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rejects a doctor of the week outside 0-6', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      headers: authed(adminToken),
+      payload: {
+        ...newDoctorPayload,
+        workingHours: [{ dayOfWeek: 7, startTime: '09:00', endTime: '12:00' }],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rejects a duplicate email with 409, mapped from the database constraint', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      headers: authed(adminToken),
+      payload: newDoctorPayload,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/admin/doctors',
+      headers: authed(adminToken),
+      payload: { ...newDoctorPayload, fullName: 'A Different Name' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe(
+      'EMAIL_ALREADY_REGISTERED',
+    );
+  });
+});
+
+describe('PATCH /admin/doctors/:id', () => {
+  it('updates the profile and echoes the current working hours', async () => {
+    const doctorId = await createDoctor(database, { specialization: 'General Medicine' });
+    await addWorkingHours(database, doctorId, [
+      { dayOfWeek: 1, startTime: '09:00', endTime: '12:00' },
+    ]);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/admin/doctors/${doctorId}`,
+      headers: authed(adminToken),
+      payload: { specialization: 'Endocrinology' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<Doctor>();
+    expect(body.specialization).toBe('Endocrinology');
+    expect(body.workingHours).toHaveLength(1);
+  });
+
+  it('404s for a doctor id that does not exist', async () => {
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/admin/doctors/00000000-0000-4000-8000-00000000ffff',
+      headers: authed(adminToken),
+      payload: { bio: 'anything' },
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('rejects a body that changes nothing at all', async () => {
+    const doctorId = await createDoctor(database);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/admin/doctors/${doctorId}`,
+      headers: authed(adminToken),
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('working hours', () => {
+  it('adds a shift and then a patient can see it on the doctor detail page', async () => {
+    const doctorId = await createDoctor(database);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/working-hours`,
+      headers: authed(adminToken),
+      payload: { dayOfWeek: 2, startTime: '09:00', endTime: '17:00' },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/doctors/${doctorId}`,
+      headers: authed(patientToken),
+    });
+    expect(detail.json<Doctor>().workingHours).toHaveLength(1);
+  });
+
+  it('409s an overlapping shift', async () => {
+    const doctorId = await createDoctor(database);
+    await addWorkingHours(database, doctorId, [
+      { dayOfWeek: 2, startTime: '09:00', endTime: '12:00' },
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/working-hours`,
+      headers: authed(adminToken),
+      payload: { dayOfWeek: 2, startTime: '11:00', endTime: '14:00' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe('WORKING_HOURS_OVERLAP');
+  });
+
+  it('deletes a shift, then a second delete of the same id 404s', async () => {
+    const doctorId = await createDoctor(database);
+    const created = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/working-hours`,
+      headers: authed(adminToken),
+      payload: { dayOfWeek: 2, startTime: '09:00', endTime: '12:00' },
+    });
+    const shiftId = created.json<{ id: string }>().id;
+
+    const first = await app.inject({
+      method: 'DELETE',
+      url: `/admin/doctors/${doctorId}/working-hours/${shiftId}`,
+      headers: authed(adminToken),
+    });
+    const second = await app.inject({
+      method: 'DELETE',
+      url: `/admin/doctors/${doctorId}/working-hours/${shiftId}`,
+      headers: authed(adminToken),
+    });
+
+    expect(first.statusCode).toBe(204);
+    expect(second.statusCode).toBe(404);
+  });
+
+  it('blocks a doctor account from adding a shift - only admins manage schedules', async () => {
+    const doctorId = await createDoctor(database);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/working-hours`,
+      headers: authed(doctorToken),
+      payload: { dayOfWeek: 2, startTime: '09:00', endTime: '12:00' },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+});
+
+describe('leaves', () => {
+  it('marks a leave day, lists it, then removes it', async () => {
+    const doctorId = await createDoctor(database);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+      payload: { leaveDate: '2026-12-25', reason: 'Holiday' },
+    });
+    expect(created.statusCode).toBe(201);
+    const leaveId = created.json<{ id: string }>().id;
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+    });
+    expect(list.json<unknown[]>()).toHaveLength(1);
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: `/admin/doctors/${doctorId}/leaves/${leaveId}`,
+      headers: authed(adminToken),
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    const listAfter = await app.inject({
+      method: 'GET',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+    });
+    expect(listAfter.json<unknown[]>()).toHaveLength(0);
+  });
+
+  it('409s a duplicate leave date for the same doctor', async () => {
+    const doctorId = await createDoctor(database);
+    await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+      payload: { leaveDate: '2026-12-25' },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+      payload: { leaveDate: '2026-12-25' },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+});
+
+describe('GET /doctors', () => {
+  it('is reachable by every role, not just patients', async () => {
+    for (const token of [adminToken, patientToken, doctorToken]) {
+      const response = await app.inject({ method: 'GET', url: '/doctors', headers: authed(token) });
+      expect(response.statusCode).toBe(200);
+    }
+  });
+
+  it('paginates through the querystring', async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await createDoctor(database, { specialization: 'Radiology' });
+    }
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/doctors?specialization=Radiology&page=2&pageSize=2',
+      headers: authed(patientToken),
+    });
+
+    const body = response.json<ListDoctorsResponse>();
+    expect(body.items).toHaveLength(1);
+    expect(body.total).toBe(3);
+    expect(body.page).toBe(2);
+  });
+});
+
+describe('GET /doctors/:id/availability', () => {
+  it('returns real slots for a doctor with a working shift', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC', slotDurationMins: 30 });
+    await addWorkingHours(database, doctorId, [
+      { dayOfWeek: 2, startTime: '09:00', endTime: '10:00' },
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/doctors/${doctorId}/availability?from=2026-09-01&to=2026-09-01`,
+      headers: authed(patientToken),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<AvailabilityResponse>();
+    expect(body.slots).toEqual([
+      { start: '2026-09-01T09:00:00.000Z', end: '2026-09-01T09:30:00.000Z' },
+      { start: '2026-09-01T09:30:00.000Z', end: '2026-09-01T10:00:00.000Z' },
+    ]);
+  });
+
+  it('rejects a range where "to" comes before "from"', async () => {
+    const doctorId = await createDoctor(database);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/doctors/${doctorId}/availability?from=2026-09-05&to=2026-09-01`,
+      headers: authed(patientToken),
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rejects a range wider than the cap, so the slot engine is never asked to expand years', async () => {
+    const doctorId = await createDoctor(database);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/doctors/${doctorId}/availability?from=2026-01-01&to=2026-12-31`,
+      headers: authed(patientToken),
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('404s for a doctor id that does not exist', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/doctors/00000000-0000-4000-8000-00000000ffff/availability?from=2026-09-01&to=2026-09-01',
+      headers: authed(patientToken),
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+});

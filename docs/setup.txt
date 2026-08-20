@@ -127,9 +127,8 @@ out of that session, not just the one request. This is on purpose: it is what
 catches a stolen refresh token being used behind the real user's back.
 
 Public sign-up (POST /auth/register) always creates a patient account, no
-matter what the request body says. Doctor and admin accounts only come from
-the seed script for now; the admin panel to create them arrives in a later
-phase.
+matter what the request body says. Doctor and admin accounts are created by
+an admin - see the next section - or come from the seed script.
 
 Before deploying anywhere real, generate your own JWT_ACCESS_SECRET - the
 placeholder in .env.local is long enough to pass validation for local work,
@@ -137,6 +136,53 @@ but the server refuses to start with NODE_ENV=production while it is still in
 place:
 
     node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+
+-------------------------------------------------------------------------------
+DOCTOR MANAGEMENT AND AVAILABILITY
+-------------------------------------------------------------------------------
+
+Everything under /admin/doctors needs an admin's access token. Everything
+under /doctors (no /admin prefix) works for any signed-in user - patients
+browse the same directory doctors and admins can see.
+
+  Create a doctor, with their first week of shifts in the same request:
+
+    curl -X POST http://localhost:4000/admin/doctors \
+      -H "Authorization: Bearer <adminAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "newdoc@clinic.test",
+        "password": "a perfectly good passphrase",
+        "fullName": "Dr New Comer",
+        "specialization": "Pediatrics",
+        "workingHours": [
+          {"dayOfWeek": 1, "startTime": "09:00", "endTime": "12:00"}
+        ]
+      }'
+
+  Mark a leave day (frees nothing yet on its own - that cascade with patient
+  notifications arrives once the outbox exists, in a later phase):
+
+    curl -X POST http://localhost:4000/admin/doctors/<doctorId>/leaves \
+      -H "Authorization: Bearer <adminAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{"leaveDate":"2026-12-25","reason":"Holiday"}'
+
+  See what is actually bookable - the whole point of this module - a real
+  live-computed grid, not a static schedule:
+
+    curl "http://localhost:4000/doctors/<doctorId>/availability?from=2026-09-01&to=2026-09-07" \
+      -H "Authorization: Bearer <accessToken>"
+
+The availability grid is computed fresh on every call from the doctor's
+working hours, minus leave days, minus already-booked appointments, minus
+slots someone else currently has on hold - in one database query, in one
+round trip. A deactivated doctor (PATCH ... {"isActive": false}) always
+returns an empty grid rather than an error - their account and history stay
+intact, they are simply not bookable.
+
+Date ranges are capped at 31 days per request (a booking UI never needs more,
+and it keeps the query's own work bounded).
 
 -------------------------------------------------------------------------------
 RUNNING THE TESTS

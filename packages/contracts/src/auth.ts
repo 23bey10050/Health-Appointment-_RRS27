@@ -8,12 +8,12 @@ import { userRoleSchema } from './user.js';
  * choosing a long passphrase instead. 128 is a ceiling only to stop a client from sending something
  * absurd through the hashing function.
  */
-const passwordSchema = z
+export const passwordSchema = z
   .string()
   .min(10, 'must be at least 10 characters')
   .max(128, 'must be at most 128 characters');
 
-const emailSchema = z.string().trim().toLowerCase().email('must be a valid email address');
+export const emailSchema = z.string().trim().toLowerCase().email('must be a valid email address');
 
 /**
  * The public sign-up form. Deliberately has no `role` field: anyone filling this in becomes a

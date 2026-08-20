@@ -17,6 +17,21 @@ declare module 'fastify' {
   }
 }
 
+/**
+ * Reads `request.user` for a route that only runs behind `requireAuth` or `requireRole`, where it
+ * is always set by the time a handler body runs. Throwing here instead of asserting with `!` means
+ * a route wired up without its guard fails loudly with a clear message the moment it is hit, rather
+ * than crashing later on `undefined.id` somewhere less obvious.
+ */
+export function requireUser(request: FastifyRequest): AuthenticatedUser {
+  if (!request.user) {
+    throw new Error(
+      'request.user is not set. This route is missing its requireAuth/requireRole preHandler.',
+    );
+  }
+  return request.user;
+}
+
 const BEARER_PREFIX = 'Bearer ';
 
 function extractBearerToken(request: FastifyRequest): string {

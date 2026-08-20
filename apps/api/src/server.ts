@@ -9,6 +9,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import type { AppConfig } from './config/env.js';
 import type { Database } from './db/client.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { adminDoctorRoutes, publicDoctorRoutes } from './modules/doctors/routes.js';
 import { healthRoutes } from './routes/health.js';
 import { registerErrorHandler } from './shared/error-handler.js';
 import { buildLoggerOptions } from './shared/logging.js';
@@ -83,6 +84,8 @@ export async function buildServer({ config, db }: ServerDependencies): Promise<F
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/auth' });
+  await app.register(adminDoctorRoutes, { prefix: '/admin/doctors' });
+  await app.register(publicDoctorRoutes, { prefix: '/doctors' });
 
   return app;
 }
