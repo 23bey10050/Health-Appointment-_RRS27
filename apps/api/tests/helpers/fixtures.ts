@@ -1,5 +1,11 @@
 import type { Database } from '../../src/db/client.js';
-import { doctorLeaves, doctorProfiles, doctorWorkingHours, users } from '../../src/db/schema.js';
+import {
+  appointments,
+  doctorLeaves,
+  doctorProfiles,
+  doctorWorkingHours,
+  users,
+} from '../../src/db/schema.js';
 import { slotOf, type TimeRange } from '../../src/db/types/time-range.js';
 
 let sequence = 0;
@@ -91,6 +97,31 @@ export async function addLeaveDay(
   leaveDate: string,
 ): Promise<void> {
   await database.db.insert(doctorLeaves).values({ doctorId, leaveDate });
+}
+
+/**
+ * A confirmed appointment written directly, bypassing the hold/confirm HTTP flow entirely — for
+ * tests further down the pipeline (notifications, reminders) that need a real appointment row to
+ * join against but are not themselves testing how it got booked.
+ */
+export async function createConfirmedAppointment(
+  database: Database,
+  input: { doctorId: string; patientId: string; slot: TimeRange; symptoms?: string },
+): Promise<string> {
+  const [row] = await database.db
+    .insert(appointments)
+    .values({
+      doctorId: input.doctorId,
+      patientId: input.patientId,
+      slot: input.slot,
+      symptomsText: input.symptoms ?? 'A routine checkup.',
+    })
+    .returning({ id: appointments.id });
+
+  if (!row) {
+    throw new Error('Could not create the appointment fixture.');
+  }
+  return row.id;
 }
 
 /**

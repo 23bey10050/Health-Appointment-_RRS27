@@ -1,5 +1,6 @@
 import { ConfigError, loadConfig } from './config/env.js';
 import { createDatabase } from './db/client.js';
+import { buildEmailSender, startBackgroundJobs } from './jobs/index.js';
 import { buildServer } from './server.js';
 import { describeUnknownError } from './shared/errors.js';
 import { createShutdownRunner } from './shared/lifecycle.js';
@@ -11,10 +12,22 @@ async function start(): Promise<void> {
   const db = createDatabase(config);
   const app = await buildServer({ config, db });
 
+  // Kept separate from buildServer on purpose — a test that builds a server with inject() should
+  // never also start a live 20-second interval touching the real outbox table underneath it.
+  const emailSender = buildEmailSender(config, app.log);
+  const scheduler = startBackgroundJobs(db, emailSender, app.log);
+
   // Hosting platforms send SIGTERM and then kill the process a short while later. Requests already
   // in flight get that window to finish, and the timeout is our promise to leave regardless.
   const shutdown = createShutdownRunner({
-    closeServer: () => app.close(),
+    closeServer: () => {
+      // Stops scheduling new ticks first. Any tick already in flight when the database closes a
+      // moment later may see a benign connection error — logged and dropped by the job's own
+      // try/catch, not a crash — which is an accepted tradeoff rather than something this project
+      // builds extra machinery to avoid; the next tick after a restart picks up cleanly regardless.
+      scheduler.stop();
+      return app.close();
+    },
     closeDatabase: () => db.close(),
     logger: app.log,
     timeoutMs: config.shutdownTimeoutMs,

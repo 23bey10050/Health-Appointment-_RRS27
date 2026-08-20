@@ -66,4 +66,36 @@ describe('loadConfig', () => {
       }),
     ).not.toThrow();
   });
+
+  it('runs with no Brevo account configured at all - the console sender takes over', () => {
+    const config = loadConfig(MINIMUM_ENV);
+
+    expect(config.email.brevoApiKey).toBeUndefined();
+    expect(config.email.senderEmail).toBeUndefined();
+    expect(config.email.senderName).toBe('Health Appointment Clinic');
+  });
+
+  it('refuses a Brevo API key with no sender address to send from', () => {
+    let caught: ConfigError | undefined;
+
+    try {
+      loadConfig({ ...MINIMUM_ENV, BREVO_API_KEY: 'a-real-looking-key' });
+    } catch (error) {
+      caught = error as ConfigError;
+    }
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    expect(caught?.problems.join(' ')).toContain('BREVO_SENDER_EMAIL');
+  });
+
+  it('accepts a Brevo key once a sender address is also given', () => {
+    const config = loadConfig({
+      ...MINIMUM_ENV,
+      BREVO_API_KEY: 'a-real-looking-key',
+      BREVO_SENDER_EMAIL: 'noreply@clinic.test',
+    });
+
+    expect(config.email.brevoApiKey).toBe('a-real-looking-key');
+    expect(config.email.senderEmail).toBe('noreply@clinic.test');
+  });
 });

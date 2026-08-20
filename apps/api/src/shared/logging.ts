@@ -3,6 +3,18 @@ import type { FastifyServerOptions } from 'fastify';
 import type { AppConfig } from '../config/env.js';
 
 /**
+ * The narrow shape of Pino this project's own code actually calls — used wherever a background job
+ * or a provider adapter needs to log something but has no business depending on the whole of Pino's
+ * real type. `app.log` satisfies this directly, and a test can hand over a plain object with three
+ * `vi.fn()`s instead.
+ */
+export interface Logger {
+  info(details: object, message: string): void;
+  warn(details: object, message: string): void;
+  error(details: object, message: string): void;
+}
+
+/**
  * Header and body fields that must never reach a log file. Logs get shipped, searched and shared,
  * so a password or a bearer token sitting in one is a leak even if nobody is looking today.
  */

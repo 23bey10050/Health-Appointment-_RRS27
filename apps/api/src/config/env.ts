@@ -22,35 +22,50 @@ const commaSeparatedList = z
   )
   .pipe(z.array(z.string().min(1)));
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(4000),
-  // `::` listens on IPv6 and, on any normal machine, on IPv4 through the same socket. Binding
-  // 0.0.0.0 instead looks harmless but costs every local caller about 200ms: browsers and curl
-  // resolve `localhost` to ::1 first, get refused, and only then retry on 127.0.0.1. See the
-  // fallback in main.ts for the rare host with IPv6 switched off entirely.
-  HOST: z.string().min(1).default('::'),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+    // `::` listens on IPv6 and, on any normal machine, on IPv4 through the same socket. Binding
+    // 0.0.0.0 instead looks harmless but costs every local caller about 200ms: browsers and curl
+    // resolve `localhost` to ::1 first, get refused, and only then retry on 127.0.0.1. See the
+    // fallback in main.ts for the rare host with IPv6 switched off entirely.
+    HOST: z.string().min(1).default('::'),
+    LOG_LEVEL: z
+      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+      .default('info'),
 
-  // The default is written as an array, not a string, because Zod hands a default straight back as
-  // the finished value instead of pushing it through the transform above.
-  CORS_ORIGINS: commaSeparatedList.default(['http://localhost:5173']),
-  SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).default(10_000),
+    // The default is written as an array, not a string, because Zod hands a default straight back as
+    // the finished value instead of pushing it through the transform above.
+    CORS_ORIGINS: commaSeparatedList.default(['http://localhost:5173']),
+    SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).default(10_000),
 
-  DATABASE_URL: postgresUrl,
-  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
-  DATABASE_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1000).default(20_000),
-  DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(8000),
+    DATABASE_URL: postgresUrl,
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+    DATABASE_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1000).default(20_000),
+    DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(8000),
 
-  // Signs access tokens. 32 characters is the shortest a random secret can be and still carry
-  // enough entropy to resist guessing; the `.env.local` template ships one that is long enough to
-  // pass this check and clearly marked as a placeholder to replace before anything real depends on it.
-  JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
-  JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
-  // Long-lived on purpose: a patient booking a follow-up weeks out should not be forced to log in
-  // again just to view it.
-  JWT_REFRESH_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
-});
+    // Signs access tokens. 32 characters is the shortest a random secret can be and still carry
+    // enough entropy to resist guessing; the `.env.local` template ships one that is long enough to
+    // pass this check and clearly marked as a placeholder to replace before anything real depends on it.
+    JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
+    JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    // Long-lived on purpose: a patient booking a follow-up weeks out should not be forced to log in
+    // again just to view it.
+    JWT_REFRESH_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+
+    // All three are optional together. Leaving BREVO_API_KEY unset is a normal, fully supported way
+    // to run this project — the outbox worker falls back to printing emails to the console instead of
+    // refusing to start, which is what lets the whole booking flow be built and demoed before anyone
+    // has signed up for an email provider.
+    BREVO_API_KEY: z.string().min(1).optional(),
+    BREVO_SENDER_EMAIL: z.string().email().optional(),
+    BREVO_SENDER_NAME: z.string().min(1).max(100).default('Health Appointment Clinic'),
+  })
+  .refine((env) => !env.BREVO_API_KEY || env.BREVO_SENDER_EMAIL, {
+    message: 'is required once BREVO_API_KEY is set, so Brevo has a "from" address to send with',
+    path: ['BREVO_SENDER_EMAIL'],
+  });
 
 type RawEnv = z.infer<typeof envSchema>;
 
@@ -81,6 +96,12 @@ export interface AppConfig {
     readonly jwtAccessSecret: string;
     readonly accessTokenTtlSeconds: number;
     readonly refreshTokenTtlDays: number;
+  };
+  readonly email: {
+    /** Undefined means "no account configured" — the console sender takes over. */
+    readonly brevoApiKey: string | undefined;
+    readonly senderEmail: string | undefined;
+    readonly senderName: string;
   };
 }
 
@@ -137,6 +158,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       jwtAccessSecret: env.JWT_ACCESS_SECRET,
       accessTokenTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
       refreshTokenTtlDays: env.JWT_REFRESH_TTL_DAYS,
+    }),
+    email: Object.freeze({
+      brevoApiKey: env.BREVO_API_KEY,
+      senderEmail: env.BREVO_SENDER_EMAIL,
+      senderName: env.BREVO_SENDER_NAME,
     }),
   });
 }

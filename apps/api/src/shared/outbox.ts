@@ -1,19 +1,10 @@
+import type { NotificationChannel, NotificationType } from '@health/contracts';
+
 import type { DbTransaction } from '../db/client.js';
 import { notificationOutbox } from '../db/schema.js';
 
 /** Runs inside either a plain Db or a transaction — both expose the same `.insert(...)`. */
 type Writable = Pick<DbTransaction, 'insert'>;
-
-export type NotificationChannel = 'email' | 'calendar';
-export type NotificationType =
-  | 'booking_confirmation'
-  | 'reminder_24h'
-  | 'reminder_1h'
-  | 'cancellation'
-  | 'reschedule'
-  | 'leave_conflict'
-  | 'medication_reminder'
-  | 'postvisit_summary';
 
 export interface QueuedNotification {
   appointmentId?: string;

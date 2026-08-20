@@ -231,12 +231,51 @@ either turned into a real appointment or left to expire on its own.
      appointment (a normal support action); a doctor account cannot touch
      any of this yet, since the doctor-facing schedule view is a later phase.
 
-Booking and cancelling both queue an email notification in the background -
-nothing sends yet, since that worker is a later phase, but the row is
-already sitting there the moment the appointment exists:
+-------------------------------------------------------------------------------
+EMAIL NOTIFICATIONS
+-------------------------------------------------------------------------------
+
+Booking, cancelling, and the reminder scheduler all queue a row in
+notification_outbox rather than sending anything directly - the
+transactional outbox pattern, so a crash right after a booking commits can
+never lose the confirmation email. A background job drains that table every
+20 seconds.
+
+With no BREVO_API_KEY set (see .env.local), emails are printed to this
+process's own log instead of sent - a completely normal way to run and demo
+the whole project. Book an appointment, then watch the API's terminal output
+for a line like:
+
+    Email sender not configured - printing instead of sending
+
+That is the confirmation email, in full, right there in the log. Set
+BREVO_API_KEY, BREVO_SENDER_EMAIL and BREVO_SENDER_NAME to send real email
+through Brevo's free tier (300/day, forever, no card) instead.
+
+Reminders queue themselves automatically: a background tick every five
+minutes looks for confirmed appointments starting within the next 24 hours,
+and separately within the next hour, and queues one reminder each. Queuing
+uses the same idempotency key every time it rediscovers the same
+appointment, so running that tick repeatedly is always safe - it can never
+send the same reminder twice.
+
+A notification that fails five times in a row - a real account is
+misconfigured, say - stops retrying itself and becomes visible to an admin
+instead of vanishing:
+
+    curl http://localhost:4000/admin/notifications/dead-letter \
+      -H "Authorization: Bearer <adminAccessToken>"
+
+    curl -X POST http://localhost:4000/admin/notifications/<id>/retry \
+      -H "Authorization: Bearer <adminAccessToken>"
+
+Retrying gives it a completely fresh set of five attempts, on the
+understanding that whatever was wrong has now been fixed.
+
+To watch the raw table directly:
 
     docker exec -it health-appointment-db psql -U health -d health_appointment \
-      -c "SELECT recipient_id, type, status FROM notification_outbox;"
+      -c "SELECT recipient_id, type, status, attempts FROM notification_outbox;"
 
 -------------------------------------------------------------------------------
 RUNNING THE TESTS

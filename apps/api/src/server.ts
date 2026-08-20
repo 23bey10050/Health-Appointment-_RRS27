@@ -11,6 +11,7 @@ import type { Database } from './db/client.js';
 import { appointmentRoutes } from './modules/appointments/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { adminDoctorRoutes, publicDoctorRoutes } from './modules/doctors/routes.js';
+import { adminNotificationRoutes } from './modules/notifications/routes.js';
 import { healthRoutes } from './routes/health.js';
 import { registerErrorHandler } from './shared/error-handler.js';
 import { buildLoggerOptions } from './shared/logging.js';
@@ -88,6 +89,7 @@ export async function buildServer({ config, db }: ServerDependencies): Promise<F
   await app.register(adminDoctorRoutes, { prefix: '/admin/doctors' });
   await app.register(publicDoctorRoutes, { prefix: '/doctors' });
   await app.register(appointmentRoutes, { prefix: '/appointments' });
+  await app.register(adminNotificationRoutes, { prefix: '/admin/notifications' });
 
   return app;
 }
