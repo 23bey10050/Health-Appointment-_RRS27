@@ -125,3 +125,57 @@ export async function findAvailableSlots(
     end: new Date(row.slot_end),
   }));
 }
+
+export interface DoctorSchedulingContext {
+  isActive: boolean;
+  slotDurationMins: number;
+  /** The calendar date, in the doctor's own timezone, that `instant` falls on — "2026-09-01". */
+  localDate: string;
+}
+
+interface SchedulingContextRow extends Record<string, unknown> {
+  is_active: boolean;
+  slot_duration_mins: number;
+  local_date: string;
+}
+
+/**
+ * Everything the booking flow needs to know before it can decide "is this instant a real,
+ * bookable slot for this doctor" — without writing a second copy of the availability query to
+ * find out.
+ *
+ * The one genuinely new piece of logic here is the reverse of what `findAvailableSlots` does:
+ * turning an absolute instant back into the doctor's own local calendar date, so the caller can
+ * hand that date straight to `findAvailableSlots(db, doctorId, localDate, localDate)` and check
+ * whether the requested slot is in the result. `timestamptz AT TIME ZONE zone` is exactly this
+ * reverse conversion — confirmed directly against Postgres before this was written, the same way
+ * the forward direction was confirmed for the query above — and doing it in Postgres rather than
+ * with a second timezone library in Node means there is only ever one IANA timezone database in
+ * play, not two that could quietly disagree about a DST transition.
+ */
+export async function findDoctorSchedulingContext(
+  db: Db | DbTransaction,
+  doctorId: string,
+  instant: Date,
+): Promise<DoctorSchedulingContext | undefined> {
+  const result = await db.execute<SchedulingContextRow>(sql`
+    SELECT
+      u.is_active,
+      dp.slot_duration_mins,
+      ((${instant.toISOString()}::timestamptz) AT TIME ZONE u.timezone)::date AS local_date
+    FROM doctor_profiles dp
+    JOIN users u ON u.id = dp.user_id
+    WHERE dp.user_id = ${doctorId}
+  `);
+
+  const row = result.rows[0];
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    isActive: row.is_active,
+    slotDurationMins: row.slot_duration_mins,
+    localDate: row.local_date,
+  };
+}

@@ -185,6 +185,60 @@ Date ranges are capped at 31 days per request (a booking UI never needs more,
 and it keeps the query's own work bounded).
 
 -------------------------------------------------------------------------------
+BOOKING AN APPOINTMENT
+-------------------------------------------------------------------------------
+
+Only a patient account can book. The flow is hold, then confirm - a slot is
+reserved for five minutes while the patient fills in the symptom form, then
+either turned into a real appointment or left to expire on its own.
+
+  1. Hold a slot. "start" is copied straight from an availability response
+     above - never typed or computed by hand, so the client never has to
+     think about the doctor's timezone at all:
+
+    curl -X POST http://localhost:4000/appointments/hold \
+      -H "Authorization: Bearer <patientAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{"doctorId":"<doctorId>","start":"2026-09-01T03:30:00.000Z"}'
+
+     Returns a holdId and an expiresAt five minutes out. A slot someone else
+     already holds, or one outside the doctor's real schedule, comes back as
+     409 SLOT_UNAVAILABLE rather than a confusing error.
+
+  2. Confirm it with the symptom form:
+
+    curl -X POST http://localhost:4000/appointments/<holdId>/confirm \
+      -H "Authorization: Bearer <patientAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{"symptoms":"Persistent headache for three days, worse in the mornings."}'
+
+     Returns the booked appointment. The hold is gone the instant this
+     succeeds, and confirming it a second time - a doubled network request,
+     say - correctly 404s rather than booking twice.
+
+  3. See your own bookings, or cancel one:
+
+    curl http://localhost:4000/appointments/mine \
+      -H "Authorization: Bearer <patientAccessToken>"
+
+    curl -X DELETE http://localhost:4000/appointments/<appointmentId> \
+      -H "Authorization: Bearer <patientAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{"reason":"Feeling better, no longer needed"}'
+
+     Cancelling frees the slot immediately - it shows up in the availability
+     grid again right away. An admin can also fetch or cancel any patient's
+     appointment (a normal support action); a doctor account cannot touch
+     any of this yet, since the doctor-facing schedule view is a later phase.
+
+Booking and cancelling both queue an email notification in the background -
+nothing sends yet, since that worker is a later phase, but the row is
+already sitting there the moment the appointment exists:
+
+    docker exec -it health-appointment-db psql -U health -d health_appointment \
+      -c "SELECT recipient_id, type, status FROM notification_outbox;"
+
+-------------------------------------------------------------------------------
 RUNNING THE TESTS
 -------------------------------------------------------------------------------
 
