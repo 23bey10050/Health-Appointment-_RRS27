@@ -109,6 +109,36 @@ Every seeded account uses the same password: Clinic@2026
 The seed refuses to run when NODE_ENV is production.
 
 -------------------------------------------------------------------------------
+TRYING THE AUTH ENDPOINTS
+-------------------------------------------------------------------------------
+
+  curl -X POST http://localhost:4000/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"email":"admin@clinic.test","password":"Clinic@2026"}'
+
+Returns an access token (15 minutes) and a refresh token (30 days). Send the
+access token on later requests as:
+
+    Authorization: Bearer <accessToken>
+
+Refresh tokens rotate on every use - the old one stops working the moment a
+new one is issued, and presenting an already-used token again logs everyone
+out of that session, not just the one request. This is on purpose: it is what
+catches a stolen refresh token being used behind the real user's back.
+
+Public sign-up (POST /auth/register) always creates a patient account, no
+matter what the request body says. Doctor and admin accounts only come from
+the seed script for now; the admin panel to create them arrives in a later
+phase.
+
+Before deploying anywhere real, generate your own JWT_ACCESS_SECRET - the
+placeholder in .env.local is long enough to pass validation for local work,
+but the server refuses to start with NODE_ENV=production while it is still in
+place:
+
+    node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+
+-------------------------------------------------------------------------------
 RUNNING THE TESTS
 -------------------------------------------------------------------------------
 

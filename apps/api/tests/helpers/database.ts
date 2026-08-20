@@ -27,6 +27,7 @@ export function createTestDatabase(): Database {
       // A small pool on purpose. The concurrency test fires many requests at once, and a pool that
       // is smaller than the burst is a more honest rehearsal of the free tier.
       DATABASE_POOL_MAX: '10',
+      JWT_ACCESS_SECRET: 'test-suite-secret-not-for-real-use-ever',
     }),
   );
 }

@@ -41,6 +41,27 @@ export class NotFoundError extends AppError {
   }
 }
 
+/** No credentials, or credentials that do not check out. The caller needs to (re-)authenticate. */
+export class UnauthorizedError extends AppError {
+  constructor(code: string, message: string, options?: { cause?: unknown }) {
+    super(401, code, message, options);
+  }
+}
+
+/** Authenticated, but not allowed to do this. Logging in again would not help. */
+export class ForbiddenError extends AppError {
+  constructor(message = 'You are not allowed to do that.', options?: { cause?: unknown }) {
+    super(403, 'FORBIDDEN', message, options);
+  }
+}
+
+/** The request is fine on its own, but it collides with the current state of something. */
+export class ConflictError extends AppError {
+  constructor(code: string, message: string, options?: { cause?: unknown }) {
+    super(409, code, message, options);
+  }
+}
+
 export class ServiceUnavailableError extends AppError {
   constructor(message: string, options?: { cause?: unknown }) {
     super(503, 'SERVICE_UNAVAILABLE', message, options);

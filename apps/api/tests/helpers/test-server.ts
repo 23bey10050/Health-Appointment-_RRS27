@@ -8,6 +8,9 @@ const TEST_ENV = {
   NODE_ENV: 'test',
   DATABASE_URL: 'postgresql://health:health@localhost:5432/health_appointment_test',
   CORS_ORIGINS: 'http://localhost:5173',
+  // Not a real secret and never needs to be - it only has to be 32 characters to satisfy the
+  // schema, and tests never run with NODE_ENV=production so the placeholder check never fires.
+  JWT_ACCESS_SECRET: 'test-suite-secret-not-for-real-use-ever',
 } satisfies NodeJS.ProcessEnv;
 
 export function buildTestConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {

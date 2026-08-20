@@ -2,10 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 
 import type { AppConfig } from './config/env.js';
 import type { Database } from './db/client.js';
+import { authRoutes } from './modules/auth/routes.js';
 import { healthRoutes } from './routes/health.js';
 import { registerErrorHandler } from './shared/error-handler.js';
 import { buildLoggerOptions } from './shared/logging.js';
@@ -46,6 +49,11 @@ export async function buildServer({ config, db }: ServerDependencies): Promise<F
   app.decorate('config', config);
   app.decorate('db', db);
 
+  // Every route's schema is a Zod object; these two compilers are what turns that into actual
+  // request validation and response serialization instead of just a type-level decoration.
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
+
   await app.register(helmet, {
     // This API answers JSON to a separate front-end origin and never serves a page itself, so the
     // browser-page directives do not apply and would only add noise to every response.
@@ -61,7 +69,20 @@ export async function buildServer({ config, db }: ServerDependencies): Promise<F
 
   registerErrorHandler(app);
 
+  await app.register(rateLimit, {
+    // The everyday ceiling for ordinary traffic. Auth routes set their own tighter limits below;
+    // this one exists so nothing on the API is completely unbounded.
+    global: true,
+    max: 300,
+    timeWindow: '1 minute',
+    // In-memory is deliberate, not a shortcut: the app runs as one process on the free tier (see
+    // the scheduling decision in the project plan), so there is no second instance for a shared
+    // Redis-backed limiter to coordinate with, and skipping Redis here is the same call that kept
+    // it out of the architecture entirely.
+  });
+
   await app.register(healthRoutes);
+  await app.register(authRoutes, { prefix: '/auth' });
 
   return app;
 }

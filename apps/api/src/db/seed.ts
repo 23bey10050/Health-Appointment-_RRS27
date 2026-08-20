@@ -1,4 +1,4 @@
-import { hash } from '@node-rs/argon2';
+import { hashPassword } from '../shared/password.js';
 
 import type { Database } from './client.js';
 import { doctorProfiles, doctorWorkingHours, users } from './schema.js';
@@ -35,7 +35,7 @@ export interface SeedSummary {
 }
 
 export async function seedDevelopmentData(database: Database): Promise<SeedSummary> {
-  const passwordHash = await hash(SEED_PASSWORD);
+  const passwordHash = await hashPassword(SEED_PASSWORD);
 
   await database.transaction(async (tx) => {
     await tx

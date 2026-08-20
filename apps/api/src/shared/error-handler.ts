@@ -1,5 +1,6 @@
 import type { ApiError } from '@health/contracts';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod';
 import { ZodError } from 'zod';
 
 import { isAppError } from './errors.js';
@@ -17,6 +18,24 @@ export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
     const requestId = request.id;
 
+    // Route schemas are Zod, validated through fastify-type-provider-zod, so a bad request body
+    // arrives here as a Fastify error carrying a `validation` array rather than as a raw ZodError.
+    if (hasZodFastifySchemaValidationErrors(error)) {
+      request.log.info({ err: error }, 'Request failed validation');
+      return reply.status(400).send(
+        buildBody('VALIDATION_FAILED', 'Some of the values sent were not valid.', requestId, {
+          details: error.validation.map((issue) => ({
+            // instancePath looks like "/email"; trimming the slash matches the dotted paths a
+            // hand-thrown ZodError produces below, so a client sees one consistent shape either way.
+            path: issue.instancePath.replace(/^\//, '') || '(body)',
+            message: issue.message ?? 'is not valid',
+          })),
+        }),
+      );
+    }
+
+    // A ZodError thrown directly by application code rather than by the route's schema — for
+    // example, a schema parsed by hand inside a service function.
     if (error instanceof ZodError) {
       request.log.info({ err: error }, 'Request failed validation');
       return reply.status(400).send(

@@ -41,9 +41,25 @@ const envSchema = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   DATABASE_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1000).default(20_000),
   DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(8000),
+
+  // Signs access tokens. 32 characters is the shortest a random secret can be and still carry
+  // enough entropy to resist guessing; the `.env.local` template ships one that is long enough to
+  // pass this check and clearly marked as a placeholder to replace before anything real depends on it.
+  JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
+  JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+  // Long-lived on purpose: a patient booking a follow-up weeks out should not be forced to log in
+  // again just to view it.
+  JWT_REFRESH_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
 });
 
 type RawEnv = z.infer<typeof envSchema>;
+
+/**
+ * The example secret checked into `.env.local`. Only exists so production can refuse to boot if
+ * someone forgets to replace it — a mistake real deployments make often enough that catching it
+ * here, once, is cheaper than hoping every future deploy remembers.
+ */
+const EXAMPLE_JWT_SECRET = 'dev-only-secret-change-before-deploying-anywhere-real';
 
 /** Everything the app is allowed to know about its surroundings, already checked and typed. */
 export interface AppConfig {
@@ -60,6 +76,11 @@ export interface AppConfig {
     readonly poolMax: number;
     readonly idleTimeoutMs: number;
     readonly connectTimeoutMs: number;
+  };
+  readonly auth: {
+    readonly jwtAccessSecret: string;
+    readonly accessTokenTtlSeconds: number;
+    readonly refreshTokenTtlDays: number;
   };
 }
 
@@ -90,6 +111,13 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const env = parsed.data;
 
+  if (env.NODE_ENV === 'production' && env.JWT_ACCESS_SECRET === EXAMPLE_JWT_SECRET) {
+    throw new ConfigError([
+      'JWT_ACCESS_SECRET: still set to the placeholder from .env.local. ' +
+        'Generate a real secret before running in production.',
+    ]);
+  }
+
   return Object.freeze({
     nodeEnv: env.NODE_ENV,
     isProduction: env.NODE_ENV === 'production',
@@ -104,6 +132,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       poolMax: env.DATABASE_POOL_MAX,
       idleTimeoutMs: env.DATABASE_IDLE_TIMEOUT_MS,
       connectTimeoutMs: env.DATABASE_CONNECT_TIMEOUT_MS,
+    }),
+    auth: Object.freeze({
+      jwtAccessSecret: env.JWT_ACCESS_SECRET,
+      accessTokenTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
+      refreshTokenTtlDays: env.JWT_REFRESH_TTL_DAYS,
     }),
   });
 }
