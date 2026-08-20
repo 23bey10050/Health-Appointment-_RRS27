@@ -1,0 +1,21 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Real secrets never leave this machine. The next line makes one deliberate exception:
+# .env.local is a placeholder file, committed so anyone cloning this repo can see exactly which
+# variables they need and where to get each key.
+.env
+.env.*
+!.env.local
+
+# Project notes and plans stay local by owner's instruction.
+*.md
+
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

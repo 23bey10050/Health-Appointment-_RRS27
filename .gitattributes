@@ -1,0 +1,8 @@
+# Keep line endings identical for everyone. Without this, a Windows checkout rewrites every file to
+# CRLF and the next commit from a Mac or from CI shows up as a whole-file change.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

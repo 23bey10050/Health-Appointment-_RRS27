@@ -1,0 +1,36 @@
+{
+  "name": "health-appointment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Clinic appointment and follow-up platform: patient, doctor and admin portals over one API.",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean",
+    "dev": "npm run build --workspace @health/contracts && npm run dev --workspace @health/api",
+    "typecheck": "tsc --build --force && tsc -p apps/api/tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspace @health/api",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}

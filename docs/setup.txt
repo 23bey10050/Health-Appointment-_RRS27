@@ -1,0 +1,127 @@
+===============================================================================
+HEALTH APPOINTMENT - SETUP GUIDE
+===============================================================================
+
+This is a plain text file rather than Markdown on purpose: the project owner
+asked that no .md file be committed, and setup notes still have to travel with
+the code. Everything below is the click-by-click path from an empty machine to
+a running app.
+
+-------------------------------------------------------------------------------
+WHAT YOU NEED INSTALLED
+-------------------------------------------------------------------------------
+
+  Node.js 22 or newer     https://nodejs.org
+  Docker Desktop          https://docker.com   (only for the local database)
+  Git
+
+Check them:
+
+  node --version
+  docker --version
+
+-------------------------------------------------------------------------------
+RUN IT LOCALLY (about two minutes, no online accounts needed)
+-------------------------------------------------------------------------------
+
+  1. Copy the environment template:
+
+       cp .env.local .env
+
+     On Windows PowerShell:  Copy-Item .env.local .env
+
+     .env.local is committed and holds placeholders only. .env is yours and is
+     never committed - that split is what keeps real keys off GitHub.
+
+  2. Install dependencies (one command, it covers every workspace):
+
+       npm install
+
+  3. Start Postgres:
+
+       npm run db:up
+
+     This runs Postgres 16 in Docker on port 5432 with the exact username,
+     password and database name the default DATABASE_URL expects, so step 1
+     needs no editing to work.
+
+     Watch it become ready:   npm run db:logs
+     Stop it later:           npm run db:down
+
+  4. Start the API:
+
+       npm run dev
+
+  5. Confirm it is alive:
+
+       curl http://localhost:4000/health
+       curl http://localhost:4000/ready
+
+     /health answers even when the database is down, on purpose. /ready is the
+     one that tells you whether Postgres is actually reachable.
+
+-------------------------------------------------------------------------------
+IF PORT 5432 IS ALREADY TAKEN
+-------------------------------------------------------------------------------
+
+Another Postgres is probably running on your machine. Either stop it, or edit
+the ports line in docker-compose.yml to '5433:5432' and change the port in
+DATABASE_URL inside your .env to match.
+
+-------------------------------------------------------------------------------
+USEFUL COMMANDS
+-------------------------------------------------------------------------------
+
+  npm run dev            Start the API with auto-reload
+  npm run check          Formatting + lint + types + tests, the full gate
+  npm test               Tests only
+  npm run lint           Lint only
+  npm run format         Rewrite files to the shared formatting rules
+  npm run build          Compile every workspace to dist/
+  npm run db:up          Start local Postgres
+  npm run db:down        Stop local Postgres
+
+-------------------------------------------------------------------------------
+FREE HOSTED SERVICES
+-------------------------------------------------------------------------------
+
+None of these are needed yet. Each one gets wired up in a later phase, and the
+app is built so a missing key means a local stand-in takes over rather than a
+crash. Every service listed is free and none of them ask for a credit card.
+
+  Neon (Postgres)          https://neon.com
+      Free tier is permanent, not a trial. Create a project, copy the POOLED
+      connection string, put it in DATABASE_URL. Use the pooled one - the
+      direct one runs out of connections quickly.
+
+  Groq (AI summaries)      https://console.groq.com
+      Create an API key. Used for the pre-visit triage note and the plain
+      English post-visit summary.
+
+  Google AI (fallback)     https://aistudio.google.com
+      A second AI key, used only when Groq is rate limited or down.
+
+  Brevo (email)            https://brevo.com
+      300 emails a day, free forever. Settings -> SMTP & API -> create an
+      API key.
+
+  Google Cloud (calendar)  https://console.cloud.google.com
+      New project -> enable "Google Calendar API" -> OAuth consent screen
+      (External, Testing mode) -> Credentials -> OAuth client ID -> Web
+      application. Billing does NOT need to be enabled for the Calendar API.
+
+  Render (API hosting)     https://render.com
+  Cloudflare Pages (web)   https://pages.cloudflare.com
+  cron-job.org (keep warm) https://cron-job.org
+
+-------------------------------------------------------------------------------
+PROJECT LAYOUT
+-------------------------------------------------------------------------------
+
+  apps/api                 The HTTP API and the background scheduler
+  packages/contracts       Zod schemas shared by the API and the browser, so
+                           the two can never disagree about a payload shape
+  docs/                    This file
+  docker-compose.yml       Local Postgres, matching the version Neon runs
+
+===============================================================================

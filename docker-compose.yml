@@ -1,0 +1,30 @@
+services:
+  postgres:
+    # Pinned to 16 because that is what Neon runs. Matching the major version locally means an
+    # exclusion constraint or a range function that works here also works in production.
+    image: postgres:16-alpine
+    container_name: health-appointment-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: health
+      POSTGRES_PASSWORD: health
+      POSTGRES_DB: health_appointment
+      # Postgres does its own date maths for reminders, so the container must agree with the app
+      # that "no timezone given" means UTC.
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # `npm run db:up` returns as soon as the container starts, which is earlier than Postgres is
+      # ready to accept queries. This check is what makes "healthy" mean "you can connect now".
+      test: ['CMD-SHELL', 'pg_isready -U health -d health_appointment']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  postgres-data:
