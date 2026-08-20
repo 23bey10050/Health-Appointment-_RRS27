@@ -12,7 +12,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && node scripts/copy-migrations.mjs",
     "clean": "tsc --build --clean",
     "dev": "npm run build --workspace @health/contracts && npm run dev --workspace @health/api",
     "typecheck": "tsc --build --force && tsc -p apps/api/tsconfig.json",
@@ -24,7 +24,10 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
-    "db:logs": "docker compose logs -f postgres"
+    "db:logs": "docker compose logs -f postgres",
+    "db:migrate": "npm run db:migrate --workspace @health/api",
+    "db:seed": "npm run db:seed --workspace @health/api",
+    "db:reset": "docker compose down -v && docker compose up -d && node scripts/wait-for-db.mjs && npm run db:migrate && npm run db:seed"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

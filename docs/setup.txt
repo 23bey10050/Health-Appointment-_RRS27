@@ -48,11 +48,19 @@ RUN IT LOCALLY (about two minutes, no online accounts needed)
      Watch it become ready:   npm run db:logs
      Stop it later:           npm run db:down
 
-  4. Start the API:
+  4. Create the tables and fill in a demo clinic:
+
+       npm run db:migrate
+       npm run db:seed
+
+     Both are safe to run twice. Migrations remember what has already been
+     applied, and the seed skips anything that is already there.
+
+  5. Start the API:
 
        npm run dev
 
-  5. Confirm it is alive:
+  6. Confirm it is alive:
 
        curl http://localhost:4000/health
        curl http://localhost:4000/ready
@@ -80,6 +88,39 @@ USEFUL COMMANDS
   npm run build          Compile every workspace to dist/
   npm run db:up          Start local Postgres
   npm run db:down        Stop local Postgres
+  npm run db:migrate     Bring the database schema up to date
+  npm run db:seed        Add demo doctors, patients and an admin
+  npm run db:reset       Wipe everything and rebuild from scratch
+
+-------------------------------------------------------------------------------
+DEMO LOGINS (created by npm run db:seed)
+-------------------------------------------------------------------------------
+
+Every seeded account uses the same password: Clinic@2026
+
+  admin@clinic.test      admin
+  mehta@clinic.test      doctor, Cardiology, 20 minute slots
+  iyer@clinic.test       doctor, Dermatology, 15 minute slots
+  khan@clinic.test       doctor, General Medicine, 30 minute slots
+  asha@example.test      patient
+  bilal@example.test     patient
+  chitra@example.test    patient, timezone Europe/London
+
+The seed refuses to run when NODE_ENV is production.
+
+-------------------------------------------------------------------------------
+RUNNING THE TESTS
+-------------------------------------------------------------------------------
+
+The tests need Postgres running, because the most important thing they check -
+that two patients cannot book the same slot - is enforced by the database
+itself. Faking it would only prove the fake agrees with the test.
+
+  npm run db:up
+  npm test
+
+The suite creates its own database called health_appointment_test and migrates
+it automatically. Your development data is never touched.
 
 -------------------------------------------------------------------------------
 FREE HOSTED SERVICES
@@ -119,9 +160,16 @@ PROJECT LAYOUT
 -------------------------------------------------------------------------------
 
   apps/api                 The HTTP API and the background scheduler
+  apps/api/src/db          Schema, migrations, seed data
   packages/contracts       Zod schemas shared by the API and the browser, so
                            the two can never disagree about a payload shape
+  scripts/                 Small build and setup helpers, plain Node
   docs/                    This file
   docker-compose.yml       Local Postgres, matching the version Neon runs
+
+Migrations are plain .sql files in apps/api/src/db/migrations. They are applied
+in filename order and their contents are hashed once applied, so editing one
+that has already run is caught instead of silently producing two different
+databases. To change the schema, add a new numbered file.
 
 ===============================================================================

@@ -36,10 +36,22 @@ export default tseslint.config(
     },
   },
   {
-    // Plain JavaScript config files sit outside every tsconfig, so the type-aware rules have no
-    // type information to work from and would only report that fact over and over.
-    files: ['**/*.js'],
+    // Plain JavaScript files - config and the small build scripts - sit outside every tsconfig, so
+    // the type-aware rules have no type information to work from and would only report that fact
+    // over and over.
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
+    // Build and setup scripts are command line tools. Printing is what they are for, and they run
+    // on Node directly rather than through the bundler, so Node's globals are theirs to use.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { console: 'readonly', process: 'readonly' },
+    },
+    rules: {
+      'no-console': 'off',
+    },
   },
   {
     files: ['**/tests/**/*.ts'],

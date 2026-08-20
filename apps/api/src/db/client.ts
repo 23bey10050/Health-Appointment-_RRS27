@@ -1,9 +1,15 @@
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 
 import type { AppConfig } from '../config/env.js';
 import { describeUnknownError } from '../shared/errors.js';
+import * as schema from './schema.js';
 
 const { Pool } = pg;
+
+export type Db = NodePgDatabase<typeof schema>;
+/** The same typed interface inside a transaction, so a query works either way. */
+export type DbTransaction = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 export interface DatabasePingResult {
   ok: boolean;
@@ -19,6 +25,16 @@ export interface DatabasePingResult {
  */
 export interface Database {
   readonly pool: pg.Pool;
+  /** Typed query builder for everyday reads and writes. */
+  readonly db: Db;
+  /**
+   * Runs several writes as one all-or-nothing unit.
+   *
+   * This is the tool behind almost every promise the app makes. Booking an appointment and queuing
+   * its confirmation email happen in one of these, so there is no moment where a patient is booked
+   * but nobody will ever tell them.
+   */
+  transaction<T>(work: (tx: DbTransaction) => Promise<T>): Promise<T>;
   ping(timeoutMs?: number): Promise<DatabasePingResult>;
   close(): Promise<void>;
 }
@@ -47,8 +63,15 @@ export function createDatabase(config: AppConfig): Database {
     process.emitWarning(`Idle database connection dropped: ${describeUnknownError(error)}`);
   });
 
+  const db = drizzle(pool, { schema, casing: 'snake_case' });
+
   return {
     pool,
+    db,
+
+    transaction<T>(work: (tx: DbTransaction) => Promise<T>): Promise<T> {
+      return db.transaction(work);
+    },
 
     async ping(timeoutMs = 3000): Promise<DatabasePingResult> {
       const startedAt = performance.now();

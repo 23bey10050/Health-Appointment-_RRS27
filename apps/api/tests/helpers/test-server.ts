@@ -25,8 +25,20 @@ export function buildTestConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
 export function createStubDatabase(
   ping: DatabasePingResult = { ok: true, latencyMs: 1 },
 ): Database {
+  // Anything beyond the health check throws rather than quietly doing nothing. A route that starts
+  // querying should fail its test loudly, not pass against an empty stand-in.
+  const refuse = (): never => {
+    throw new Error('This test used a stub database. Use createTestDatabase() for real queries.');
+  };
+
   return {
-    pool: undefined as unknown as Database['pool'],
+    get pool(): Database['pool'] {
+      return refuse();
+    },
+    get db(): Database['db'] {
+      return refuse();
+    },
+    transaction: refuse,
     ping: () => Promise.resolve(ping),
     close: () => Promise.resolve(),
   };

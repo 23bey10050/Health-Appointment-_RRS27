@@ -4,8 +4,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    // Tests that talk to a real database share one schema, so letting files run side by side would
-    // have them deleting each other's rows. Single file at a time is slower and correct.
+    // Creates and migrates the test database once, before anything runs.
+    globalSetup: ['tests/setup/global-database.ts'],
+    // Test files share one database, so letting them run side by side would have them truncating
+    // each other's rows mid-assertion. One file at a time is slower and correct.
     fileParallelism: false,
     env: {
       NODE_ENV: 'test',
