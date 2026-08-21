@@ -509,3 +509,70 @@ describe('DELETE /appointments/:id', () => {
     expect(response.statusCode).toBe(404);
   });
 });
+
+describe('GET /appointments/schedule', () => {
+  async function bookOne(): Promise<Appointment> {
+    const hold = (await holdTheSlot(patient.token)).json<HoldResponse>();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/appointments/${hold.holdId}/confirm`,
+      headers: authed(patient.token),
+      payload: { symptoms: 'A routine checkup for an ongoing condition.' },
+    });
+    return response.json<Appointment>();
+  }
+
+  it("returns the assigned doctor's own appointments for that local day", async () => {
+    const appointment = await bookOne();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/appointments/schedule?from=2026-09-01&to=2026-09-01',
+      headers: authed(assignedDoctorToken),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<Appointment[]>().map((a) => a.id)).toEqual([appointment.id]);
+  });
+
+  it("never returns another doctor's own appointments", async () => {
+    await bookOne();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/appointments/schedule?from=2026-09-01&to=2026-09-01',
+      headers: authed(doctorToken),
+    });
+
+    expect(response.json<Appointment[]>()).toEqual([]);
+  });
+
+  it('blocks a patient account - this is the doctor own view', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/appointments/schedule?from=2026-09-01&to=2026-09-01',
+      headers: authed(patient.token),
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('rejects an unauthenticated request with 401', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/appointments/schedule?from=2026-09-01&to=2026-09-01',
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('rejects a range spanning more than the cap', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/appointments/schedule?from=2026-01-01&to=2026-12-31',
+      headers: authed(assignedDoctorToken),
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+});

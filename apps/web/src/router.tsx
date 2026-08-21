@@ -37,6 +37,17 @@ export const router = createBrowserRouter([
               { path: 'hold/:holdId', lazy: () => import('./routes/patient/ConfirmHoldPage.js') },
             ],
           },
+          {
+            element: <RequireRole roles={['doctor']} />,
+            children: [
+              { path: 'doctor/schedule', lazy: () => import('./routes/doctor/SchedulePage.js') },
+              {
+                path: 'doctor/appointments/:id',
+                lazy: () => import('./routes/doctor/AppointmentVisitPage.js'),
+              },
+              { path: 'doctor/leaves', lazy: () => import('./routes/doctor/LeavesPage.js') },
+            ],
+          },
         ],
       },
       { path: '*', lazy: () => import('./routes/NotFoundPage.js') },

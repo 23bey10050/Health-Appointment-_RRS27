@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Database } from '../../../src/db/client.js';
-import { users } from '../../../src/db/schema.js';
+import { appointments, users } from '../../../src/db/schema.js';
 import * as repository from '../../../src/modules/doctors/repository.js';
 import {
   createTestDatabase,
@@ -11,7 +11,13 @@ import {
   sqlStateOf,
   UNIQUE_VIOLATION,
 } from '../../helpers/database.js';
-import { addWorkingHours, createDoctor } from '../../helpers/fixtures.js';
+import {
+  addWorkingHours,
+  createConfirmedAppointment,
+  createDoctor,
+  createPatient,
+  slotAt,
+} from '../../helpers/fixtures.js';
 
 let database: Database;
 
@@ -272,5 +278,75 @@ describe('leaves', () => {
 
     expect(deletedUsingWrongDoctor).toBe(false);
     expect(deletedUsingRightDoctor).toBe(true);
+  });
+});
+
+describe('countConfirmedAppointmentsOnDate', () => {
+  it('counts every confirmed appointment that falls on the doctor own local day', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC' });
+    const patientId = await createPatient(database);
+    await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(9) });
+    await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(14) });
+
+    const total = await repository.countConfirmedAppointmentsOnDate(
+      database.db,
+      doctorId,
+      '2026-09-01',
+    );
+
+    expect(total).toBe(2);
+  });
+
+  it('ignores an appointment on a different day', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC' });
+    const patientId = await createPatient(database);
+    await createConfirmedAppointment(database, {
+      doctorId,
+      patientId,
+      slot: {
+        start: new Date('2026-09-02T09:00:00.000Z'),
+        end: new Date('2026-09-02T09:20:00.000Z'),
+      },
+    });
+
+    const total = await repository.countConfirmedAppointmentsOnDate(
+      database.db,
+      doctorId,
+      '2026-09-01',
+    );
+
+    expect(total).toBe(0);
+  });
+
+  it('does not count an appointment that has already been cancelled', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC' });
+    const patientId = await createPatient(database);
+    const appointmentId = await createConfirmedAppointment(database, {
+      doctorId,
+      patientId,
+      slot: slotAt(9),
+    });
+    await database.db
+      .update(appointments)
+      .set({ status: 'cancelled' })
+      .where(eq(appointments.id, appointmentId));
+
+    const total = await repository.countConfirmedAppointmentsOnDate(
+      database.db,
+      doctorId,
+      '2026-09-01',
+    );
+
+    expect(total).toBe(0);
+  });
+
+  it('returns zero, not an error, for a doctor id that does not exist', async () => {
+    const total = await repository.countConfirmedAppointmentsOnDate(
+      database.db,
+      '00000000-0000-4000-8000-00000000ffff',
+      '2026-09-01',
+    );
+
+    expect(total).toBe(0);
   });
 });

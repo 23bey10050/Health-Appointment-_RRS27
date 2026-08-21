@@ -9,6 +9,7 @@ import {
   doctorWorkingHours,
   users,
 } from '../../db/schema.js';
+import { resolveDoctorDayRange } from '../../shared/doctor-day-range.js';
 import { hashPassword } from '../../shared/password.js';
 
 /** Anything that can run a `select`/`insert`/`update`/`delete` — a plain connection or mid-transaction. */
@@ -402,6 +403,37 @@ export async function findAndLockConfirmedAppointmentsOnDate(
     appointmentId: row.appointment_id,
     patientId: row.patient_id,
   }));
+}
+
+/**
+ * The read-only cousin of `findAndLockConfirmedAppointmentsOnDate` - same "which confirmed visits
+ * fall on this local calendar day" question, but for a preview a doctor is just looking at before
+ * deciding whether to actually mark the day off, so it takes no lock and touches nothing. Reuses
+ * `resolveDoctorDayRange` rather than repeating that CTE a third time, since a plain count has none
+ * of the locking-transaction requirements that kept the cascade's own query as its own thing.
+ */
+export async function countConfirmedAppointmentsOnDate(
+  db: Executor,
+  doctorId: string,
+  leaveDate: string,
+): Promise<number> {
+  const range = await resolveDoctorDayRange(db, doctorId, leaveDate, leaveDate);
+  if (!range) {
+    return 0;
+  }
+
+  const [row] = await db
+    .select({ total: count() })
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.doctorId, doctorId),
+        eq(appointments.status, 'confirmed'),
+        sql`${appointments.slot} && tstzrange(${range.start.toISOString()}, ${range.end.toISOString()}, '[)')`,
+      ),
+    );
+
+  return row?.total ?? 0;
 }
 
 export async function cancelAppointmentForLeave(

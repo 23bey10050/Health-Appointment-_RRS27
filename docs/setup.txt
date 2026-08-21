@@ -79,9 +79,13 @@ RUN IT LOCALLY (about two minutes, no online accounts needed)
      appointment is real: it is in Postgres, and if BREVO_API_KEY is not set,
      its confirmation email is sitting in the API's own terminal window.
 
-     Doctor and admin accounts can sign in too - they land on an honest "not
-     built yet" screen rather than one that quietly fails, since only the
-     patient portal exists so far.
+     A seeded doctor account (mehta@clinic.test, password Clinic@2026) lands
+     on their own daily schedule instead - open a booked appointment to see
+     the pre-visit AI brief and, once notes are submitted, the completed
+     visit's notes and prescription; "Days off" lets a doctor mark a leave
+     day with a preview of how many booked patients it would affect before
+     confirming. An admin account still lands on an honest "not built yet"
+     screen, since the admin portal is a later phase.
 
 -------------------------------------------------------------------------------
 IF PORT 5432 IS ALREADY TAKEN
@@ -176,13 +180,16 @@ browse the same directory doctors and admins can see.
         ]
       }'
 
-  Mark a leave day (frees nothing yet on its own - that cascade with patient
-  notifications arrives once the outbox exists, in a later phase):
+  Mark a leave day. This cancels every confirmed appointment already booked
+  on it, atomically, and the response says how many:
 
     curl -X POST http://localhost:4000/admin/doctors/<doctorId>/leaves \
       -H "Authorization: Bearer <adminAccessToken>" \
       -H "Content-Type: application/json" \
       -d '{"leaveDate":"2026-12-25","reason":"Holiday"}'
+
+  A doctor can do the same thing to their own calendar, with no doctor id in
+  the URL at all - see DOCTOR PORTAL below.
 
   See what is actually bookable - the whole point of this module - a real
   live-computed grid, not a static schedule:
@@ -244,8 +251,56 @@ either turned into a real appointment or left to expire on its own.
 
      Cancelling frees the slot immediately - it shows up in the availability
      grid again right away. An admin can also fetch or cancel any patient's
-     appointment (a normal support action); a doctor account cannot touch
-     any of this yet, since the doctor-facing schedule view is a later phase.
+     appointment (a normal support action). The assigned doctor can also read
+     it - see DOCTOR PORTAL below for their own schedule view.
+
+-------------------------------------------------------------------------------
+DOCTOR PORTAL
+-------------------------------------------------------------------------------
+
+Everything here is doctor-only, and none of it takes a doctor id anywhere in
+the request - the API always reads who is asking from the access token, the
+same way a patient's own /appointments/mine never takes a patient id either.
+
+  A doctor's own day (or up to a 31-day range), sorted by visit time:
+
+    curl "http://localhost:4000/appointments/schedule?from=2026-09-01&to=2026-09-01" \
+      -H "Authorization: Bearer <doctorAccessToken>"
+
+  Complete a visit - notes plus a structured prescription. This is what
+  fires the post-visit AI summary (Phase 6) and schedules medication
+  reminders (Phase 8):
+
+    curl -X POST http://localhost:4000/appointments/<appointmentId>/notes \
+      -H "Authorization: Bearer <doctorAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "doctorNotes": "Mild seasonal allergy. Advised rest and fluids.",
+        "prescription": [
+          {"drug":"Cetirizine","dosage":"10mg","timesPerDay":1,"durationDays":5}
+        ]
+      }'
+
+  Self-service leave management - list, preview, mark, and remove a day off
+  on the caller's own calendar:
+
+    curl http://localhost:4000/doctors/me/leaves \
+      -H "Authorization: Bearer <doctorAccessToken>"
+
+    curl "http://localhost:4000/doctors/me/leaves/preview?leaveDate=2026-12-25" \
+      -H "Authorization: Bearer <doctorAccessToken>"
+
+     Returns {"affectedAppointments": N} - a real, read-only count of what
+     marking that day would cancel, computed before anything is committed.
+     The browser app shows this as a warning with a separate confirm step.
+
+    curl -X POST http://localhost:4000/doctors/me/leaves \
+      -H "Authorization: Bearer <doctorAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{"leaveDate":"2026-12-25","reason":"Personal leave"}'
+
+    curl -X DELETE http://localhost:4000/doctors/me/leaves/<leaveId> \
+      -H "Authorization: Bearer <doctorAccessToken>"
 
 -------------------------------------------------------------------------------
 EMAIL NOTIFICATIONS

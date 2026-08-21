@@ -246,6 +246,21 @@ export async function deleteLeave(
   }
 }
 
+/** Lets a doctor see the cost of marking a day off before they commit to it, instead of finding
+ *  out how many patients got bumped only after the cascade has already run. */
+export async function previewLeaveImpact(
+  database: Database,
+  doctorId: string,
+  leaveDate: string,
+): Promise<{ affectedAppointments: number }> {
+  const affectedAppointments = await repository.countConfirmedAppointmentsOnDate(
+    database.db,
+    doctorId,
+    leaveDate,
+  );
+  return { affectedAppointments };
+}
+
 /**
  * A deactivated doctor keeps their record — an admin can still look them up, reactivate them, or
  * inspect their history — but they have nothing to sell. Returning an empty grid here, rather than

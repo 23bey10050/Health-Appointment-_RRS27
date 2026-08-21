@@ -4,6 +4,7 @@ import {
   confirmRequestSchema,
   holdRequestSchema,
   holdResponseSchema,
+  scheduleQuerySchema,
   submitNotesRequestSchema,
   type Appointment,
   type CancelAppointmentRequest,
@@ -129,6 +130,23 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
         requireUser(request).id,
       );
       return reply.status(200).send(mine.map(toAppointment));
+    },
+  );
+
+  app.get(
+    '/schedule',
+    {
+      preHandler: requireRole('doctor'),
+      schema: { querystring: scheduleQuerySchema, response: { 200: z.array(appointmentSchema) } },
+    },
+    async (request, reply) => {
+      const schedule = await appointmentService.getMySchedule(
+        request.server.db,
+        requireUser(request).id,
+        request.query.from,
+        request.query.to,
+      );
+      return reply.status(200).send(schedule.map(toAppointment));
     },
   );
 

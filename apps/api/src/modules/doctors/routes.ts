@@ -5,6 +5,8 @@ import {
   createLeaveRequestSchema,
   createLeaveResponseSchema,
   doctorSchema,
+  leavePreviewQuerySchema,
+  leavePreviewResponseSchema,
   leaveSchema,
   listDoctorsQuerySchema,
   listDoctorsResponseSchema,
@@ -34,6 +36,7 @@ const workingHourIdParamsSchema = z.object({
   workingHourId: z.string().uuid(),
 });
 const leaveIdParamsSchema = z.object({ id: z.string().uuid(), leaveId: z.string().uuid() });
+const selfLeaveIdParamsSchema = z.object({ leaveId: z.string().uuid() });
 
 function toDoctorSummary(row: DoctorRow): DoctorSummary {
   return {
@@ -240,6 +243,74 @@ export const publicDoctorRoutes: FastifyPluginCallbackZod = (app, _options, done
         to: request.query.to,
         slots: slots.map(toSlot),
       });
+    },
+  );
+
+  done();
+};
+
+/**
+ * A doctor managing their own leave days. There is no ownership check to get wrong here the way
+ * the admin routes need one - `doctorId` is always whoever the access token belongs to, never a
+ * value a request body or URL param could tamper with.
+ */
+export const selfDoctorRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
+  app.addHook('preHandler', requireRole('doctor'));
+
+  app.get(
+    '/leaves',
+    { schema: { response: { 200: z.array(leaveSchema) } } },
+    async (request, reply) => {
+      const leaves = await doctorService.listLeaves(request.server.db, requireUser(request).id);
+      return reply.status(200).send(leaves.map(toLeave));
+    },
+  );
+
+  app.get(
+    '/leaves/preview',
+    {
+      schema: {
+        querystring: leavePreviewQuerySchema,
+        response: { 200: leavePreviewResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const preview = await doctorService.previewLeaveImpact(
+        request.server.db,
+        requireUser(request).id,
+        request.query.leaveDate,
+      );
+      return reply.status(200).send(preview);
+    },
+  );
+
+  app.post(
+    '/leaves',
+    {
+      schema: { body: createLeaveRequestSchema, response: { 201: createLeaveResponseSchema } },
+    },
+    async (request, reply) => {
+      const doctorId = requireUser(request).id;
+      const created = await doctorService.addLeave(
+        request.server.db,
+        doctorId,
+        request.body,
+        doctorId,
+      );
+      return reply.status(201).send(toCreateLeaveResponse(created));
+    },
+  );
+
+  app.delete(
+    '/leaves/:leaveId',
+    { schema: { params: selfLeaveIdParamsSchema } },
+    async (request, reply) => {
+      await doctorService.deleteLeave(
+        request.server.db,
+        requireUser(request).id,
+        request.params.leaveId,
+      );
+      return reply.status(204).send();
     },
   );
 

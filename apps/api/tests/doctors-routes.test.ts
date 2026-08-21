@@ -568,3 +568,158 @@ describe('GET /doctors/:id/availability', () => {
     expect(response.statusCode).toBe(404);
   });
 });
+
+describe('self-service leaves, a doctor managing their own days off', () => {
+  async function selfDoctor(): Promise<{ id: string; token: string }> {
+    const id = await createDoctor(database, { timezone: 'UTC' });
+    const testConfig = buildTestConfig();
+    const token = signAccessToken(
+      { sub: id, role: 'doctor' },
+      {
+        secret: testConfig.auth.jwtAccessSecret,
+        ttlSeconds: testConfig.auth.accessTokenTtlSeconds,
+      },
+    ).token;
+    return { id, token };
+  }
+
+  it('marks, lists, and removes a leave day for the caller own account - no doctor id in the URL at all', async () => {
+    const doctor = await selfDoctor();
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/doctors/me/leaves',
+      headers: authed(doctor.token),
+      payload: { leaveDate: '2026-12-25', reason: 'Family time' },
+    });
+    expect(created.statusCode).toBe(201);
+    const leaveId = created.json<{ id: string }>().id;
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/doctors/me/leaves',
+      headers: authed(doctor.token),
+    });
+    expect(list.json<unknown[]>()).toHaveLength(1);
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: `/doctors/me/leaves/${leaveId}`,
+      headers: authed(doctor.token),
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    const listAfter = await app.inject({
+      method: 'GET',
+      url: '/doctors/me/leaves',
+      headers: authed(doctor.token),
+    });
+    expect(listAfter.json<unknown[]>()).toHaveLength(0);
+  });
+
+  it('blocks a patient and an admin - this is a doctor own view, not something to manage on their behalf', async () => {
+    for (const token of [patientToken, adminToken]) {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/doctors/me/leaves',
+        headers: authed(token),
+      });
+      expect(response.statusCode).toBe(403);
+    }
+  });
+
+  it("never lets one doctor see or delete another doctor's own leave day", async () => {
+    const doctorA = await selfDoctor();
+    const doctorB = await selfDoctor();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/doctors/me/leaves',
+      headers: authed(doctorA.token),
+      payload: { leaveDate: '2026-12-25' },
+    });
+    const leaveId = created.json<{ id: string }>().id;
+
+    const listAsB = await app.inject({
+      method: 'GET',
+      url: '/doctors/me/leaves',
+      headers: authed(doctorB.token),
+    });
+    const deleteAsB = await app.inject({
+      method: 'DELETE',
+      url: `/doctors/me/leaves/${leaveId}`,
+      headers: authed(doctorB.token),
+    });
+
+    expect(listAsB.json<unknown[]>()).toEqual([]);
+    expect(deleteAsB.statusCode).toBe(404);
+  });
+
+  it('409s marking a date that is already a leave day for this doctor', async () => {
+    const doctor = await selfDoctor();
+    await app.inject({
+      method: 'POST',
+      url: '/doctors/me/leaves',
+      headers: authed(doctor.token),
+      payload: { leaveDate: '2026-12-25' },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/doctors/me/leaves',
+      headers: authed(doctor.token),
+      payload: { leaveDate: '2026-12-25' },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('the preview count matches the real cancellation count once the day is actually marked', async () => {
+    const doctor = await selfDoctor();
+    const patientId = await createPatient(database);
+    await createConfirmedAppointment(database, { doctorId: doctor.id, patientId, slot: slotAt(9) });
+    await createConfirmedAppointment(database, {
+      doctorId: doctor.id,
+      patientId,
+      slot: slotAt(14),
+    });
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: '/doctors/me/leaves/preview?leaveDate=2026-09-01',
+      headers: authed(doctor.token),
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json<{ affectedAppointments: number }>().affectedAppointments).toBe(2);
+
+    const stillConfirmed = await database.db
+      .select({ status: appointments.status })
+      .from(appointments);
+    expect(stillConfirmed.every((row) => row.status === 'confirmed')).toBe(true);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/doctors/me/leaves',
+      headers: authed(doctor.token),
+      payload: { leaveDate: '2026-09-01' },
+    });
+    expect(created.json<CreateLeaveResponse>().cancelledAppointments).toBe(2);
+  });
+
+  it('rejects a preview call with no leaveDate at all', async () => {
+    const doctor = await selfDoctor();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/doctors/me/leaves/preview',
+      headers: authed(doctor.token),
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rejects an unauthenticated request with 401', async () => {
+    const response = await app.inject({ method: 'GET', url: '/doctors/me/leaves' });
+
+    expect(response.statusCode).toBe(401);
+  });
+});

@@ -11,7 +11,11 @@ import type { Database } from './db/client.js';
 import { appointmentRoutes } from './modules/appointments/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { calendarAuthRoutes } from './modules/calendar/routes.js';
-import { adminDoctorRoutes, publicDoctorRoutes } from './modules/doctors/routes.js';
+import {
+  adminDoctorRoutes,
+  publicDoctorRoutes,
+  selfDoctorRoutes,
+} from './modules/doctors/routes.js';
 import { adminNotificationRoutes } from './modules/notifications/routes.js';
 import { buildSummaryProviders } from './modules/summaries/setup.js';
 import type { SummaryProvider } from './modules/summaries/provider.js';
@@ -101,6 +105,7 @@ export async function buildServer({
   await app.register(calendarAuthRoutes, { prefix: '/auth/google' });
   await app.register(adminDoctorRoutes, { prefix: '/admin/doctors' });
   await app.register(publicDoctorRoutes, { prefix: '/doctors' });
+  await app.register(selfDoctorRoutes, { prefix: '/doctors/me' });
   await app.register(appointmentRoutes, { prefix: '/appointments' });
   await app.register(adminNotificationRoutes, { prefix: '/admin/notifications' });
 

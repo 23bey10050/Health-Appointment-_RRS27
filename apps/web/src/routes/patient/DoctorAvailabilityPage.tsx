@@ -6,19 +6,15 @@ import { ColdStartNotice } from '../../components/ColdStartNotice.js';
 import { useAvailability } from '../../features/doctors/queries.js';
 import { useHoldSlot } from '../../features/appointments/queries.js';
 import { ApiError } from '../../lib/api-client.js';
-import { formatDate, formatTime, localDateKey } from '../../lib/format.js';
+import {
+  addDays,
+  formatDate,
+  formatTime,
+  localDateKey,
+  todayAsDateString,
+} from '../../lib/format.js';
 
 const VISIBLE_DAYS = 7;
-
-function todayAsDateString(): string {
-  return new Intl.DateTimeFormat('en-CA').format(new Date());
-}
-
-function addDays(dateString: string, days: number): string {
-  const date = new Date(`${dateString}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return new Intl.DateTimeFormat('en-CA').format(date);
-}
 
 export function Component() {
   const { doctorId } = useParams<{ doctorId: string }>();

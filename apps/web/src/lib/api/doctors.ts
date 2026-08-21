@@ -1,10 +1,17 @@
 import {
   availabilityResponseSchema,
+  createLeaveResponseSchema,
+  leavePreviewResponseSchema,
+  leaveSchema,
   listDoctorsResponseSchema,
   type AvailabilityResponse,
+  type CreateLeaveResponse,
+  type Leave,
+  type LeavePreviewResponse,
   type ListDoctorsQuery,
   type ListDoctorsResponse,
 } from '@health/contracts';
+import { z } from 'zod';
 
 import { apiRequest } from '../api-client.js';
 
@@ -35,4 +42,29 @@ export function getAvailability(
 ): Promise<AvailabilityResponse> {
   const search = toQueryString({ from, to });
   return apiRequest(`/doctors/${doctorId}/availability${search}`, availabilityResponseSchema);
+}
+
+/**
+ * A doctor's own leave days - there is no doctor id anywhere in these calls, on purpose, the same
+ * way `getMySchedule` has none either. The API reads who is asking from the access token, so there
+ * is nothing here a request could tamper with to reach someone else's calendar.
+ */
+export function listMyLeaves(): Promise<Leave[]> {
+  return apiRequest('/doctors/me/leaves', z.array(leaveSchema));
+}
+
+export function previewLeaveImpact(leaveDate: string): Promise<LeavePreviewResponse> {
+  const search = toQueryString({ leaveDate });
+  return apiRequest(`/doctors/me/leaves/preview${search}`, leavePreviewResponseSchema);
+}
+
+export function addMyLeave(leaveDate: string, reason?: string): Promise<CreateLeaveResponse> {
+  return apiRequest('/doctors/me/leaves', createLeaveResponseSchema, {
+    method: 'POST',
+    body: reason ? { leaveDate, reason } : { leaveDate },
+  });
+}
+
+export function deleteMyLeave(leaveId: string): Promise<void> {
+  return apiRequest(`/doctors/me/leaves/${leaveId}`, z.void(), { method: 'DELETE' });
 }

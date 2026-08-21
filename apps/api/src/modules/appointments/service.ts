@@ -7,6 +7,7 @@ import { findAvailableSlots, findDoctorSchedulingContext } from '../doctors/avai
 import { findUserTimezone } from '../medications/repository.js';
 import { scheduleMedicationReminders } from '../medications/service.js';
 import { writeAuditEntry } from '../../shared/audit.js';
+import { resolveDoctorDayRange } from '../../shared/doctor-day-range.js';
 import { ConflictError, NotFoundError } from '../../shared/errors.js';
 import { queueNotification } from '../../shared/outbox.js';
 
@@ -18,6 +19,7 @@ import {
   findAppointmentDetailById,
   findAppointmentForUpdate,
   findHoldForUpdate,
+  listAppointmentsForDoctor,
   listAppointmentsForPatient,
   saveDoctorNotes,
   type AppointmentDetail,
@@ -206,6 +208,26 @@ export async function listMyAppointments(
   patientId: string,
 ): Promise<AppointmentDetail[]> {
   return listAppointmentsForPatient(database, patientId);
+}
+
+/** A doctor's own daily/weekly schedule - `doctorId` only ever arrives here as the caller's own
+ *  id, taken from their own access token, so this has no ownership check to make the way
+ *  `getAppointment` does for a single appointment; there is no other doctor's schedule this
+ *  function could even be asked for. */
+export async function getMySchedule(
+  database: Database,
+  doctorId: string,
+  from: string,
+  to: string,
+): Promise<AppointmentDetail[]> {
+  const range = await resolveDoctorDayRange(database.db, doctorId, from, to);
+  if (!range) {
+    // Unreachable in practice - see resolveDoctorDayRange's own comment - kept as a real error
+    // rather than an empty list, so a bug here fails loudly instead of just looking like an
+    // empty schedule.
+    throw new Error(`Doctor ${doctorId} was expected to exist but does not.`);
+  }
+  return listAppointmentsForDoctor(database, doctorId, range);
 }
 
 export interface Requester {

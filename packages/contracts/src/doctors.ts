@@ -8,8 +8,9 @@ const timeOfDaySchema = z.string().regex(TIME_PATTERN, 'must be a time like "09:
 
 /** A plain calendar date, "2026-09-01" — never a full timestamp. Working hours have no timezone
  * of their own; they are always read in the doctor's own zone, which is why the wire format stays
- * a bare date rather than something that could smuggle in an offset. */
-const calendarDateSchema = z
+ * a bare date rather than something that could smuggle in an offset. Exported because a doctor's
+ * schedule query (contracts/appointments.ts) needs the exact same shape for the same reason. */
+export const calendarDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be a date like "2026-09-01"');
 
@@ -149,6 +150,22 @@ export const createLeaveResponseSchema = leaveSchema.extend({
 export type CreateLeaveResponse = z.infer<typeof createLeaveResponseSchema>;
 
 export type Leave = z.infer<typeof leaveSchema>;
+
+export const leavePreviewQuerySchema = z.object({
+  leaveDate: calendarDateSchema,
+});
+
+export type LeavePreviewQuery = z.infer<typeof leavePreviewQuerySchema>;
+
+/** What a doctor sees before they actually commit to a leave day - the same count
+ * `createLeaveResponseSchema` reports after the fact, but computed as a plain read with nothing
+ * cancelled yet, so the "N patients will be affected" warning the plan asks for can be shown and
+ * backed out of before anything real happens. */
+export const leavePreviewResponseSchema = z.object({
+  affectedAppointments: z.number().int().min(0),
+});
+
+export type LeavePreviewResponse = z.infer<typeof leavePreviewResponseSchema>;
 
 /**
  * A range wide enough for a real booking UI (a term, roughly) and narrow enough that the slot

@@ -1,10 +1,18 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Database } from '../../../src/db/client.js';
+import { appointments } from '../../../src/db/schema.js';
 import * as doctorService from '../../../src/modules/doctors/service.js';
 import { AppError } from '../../../src/shared/errors.js';
 import { createTestDatabase, resetDatabase } from '../../helpers/database.js';
-import { addWorkingHours, createDoctor } from '../../helpers/fixtures.js';
+import {
+  addWorkingHours,
+  createConfirmedAppointment,
+  createDoctor,
+  createPatient,
+  slotAt,
+} from '../../helpers/fixtures.js';
 
 let database: Database;
 
@@ -188,5 +196,37 @@ describe('getAvailability', () => {
     });
 
     expect(slots).toEqual([]);
+  });
+});
+
+describe('previewLeaveImpact', () => {
+  it('reports how many confirmed appointments a leave day would affect, without cancelling any of them', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC' });
+    const patientId = await createPatient(database);
+    const appointmentId = await createConfirmedAppointment(database, {
+      doctorId,
+      patientId,
+      slot: slotAt(9),
+    });
+    await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(14) });
+
+    const preview = await doctorService.previewLeaveImpact(database, doctorId, '2026-09-01');
+
+    expect(preview.affectedAppointments).toBe(2);
+    // A preview must be read-only - the appointment counted above should still be sitting there
+    // confirmed, not cancelled by the mere act of asking what a leave day would do to it.
+    const [row] = await database.db
+      .select({ status: appointments.status })
+      .from(appointments)
+      .where(eq(appointments.id, appointmentId));
+    expect(row?.status).toBe('confirmed');
+  });
+
+  it('reports zero for a day with nothing booked on it', async () => {
+    const doctorId = await createDoctor(database);
+
+    const preview = await doctorService.previewLeaveImpact(database, doctorId, '2026-09-01');
+
+    expect(preview.affectedAppointments).toBe(0);
   });
 });

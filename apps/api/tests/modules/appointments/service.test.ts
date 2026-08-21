@@ -606,3 +606,77 @@ describe('submitNotes', () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+describe('getMySchedule', () => {
+  it('orders by visit time, not by which appointment was booked first', async () => {
+    const doctorId = await createBookableDoctor();
+    const patientId = await createPatient(database);
+
+    const laterHold = await appointmentService.holdSlot(
+      database,
+      patientId,
+      doctorId,
+      new Date('2026-09-01T09:20:00.000Z'),
+    );
+    const laterAppointment = await appointmentService.confirmHold(
+      database,
+      patientId,
+      laterHold.id,
+      'booked first, happens second',
+    );
+    const earlierHold = await appointmentService.holdSlot(
+      database,
+      patientId,
+      doctorId,
+      SLOT_START,
+    );
+    const earlierAppointment = await appointmentService.confirmHold(
+      database,
+      patientId,
+      earlierHold.id,
+      'booked second, happens first',
+    );
+
+    const schedule = await appointmentService.getMySchedule(
+      database,
+      doctorId,
+      '2026-09-01',
+      '2026-09-01',
+    );
+
+    expect(schedule.map((a) => a.id)).toEqual([earlierAppointment.id, laterAppointment.id]);
+  });
+
+  it('never returns another doctor own appointments', async () => {
+    const doctorId = await createBookableDoctor();
+    const otherDoctorId = await createBookableDoctor();
+    const patientId = await createPatient(database);
+    const hold = await appointmentService.holdSlot(database, patientId, doctorId, SLOT_START);
+    await appointmentService.confirmHold(database, patientId, hold.id, 'a visit');
+
+    const otherSchedule = await appointmentService.getMySchedule(
+      database,
+      otherDoctorId,
+      '2026-09-01',
+      '2026-09-01',
+    );
+
+    expect(otherSchedule).toEqual([]);
+  });
+
+  it('excludes an appointment that falls outside the requested day range', async () => {
+    const doctorId = await createBookableDoctor();
+    const patientId = await createPatient(database);
+    const hold = await appointmentService.holdSlot(database, patientId, doctorId, SLOT_START);
+    await appointmentService.confirmHold(database, patientId, hold.id, 'a visit');
+
+    const schedule = await appointmentService.getMySchedule(
+      database,
+      doctorId,
+      '2026-09-02',
+      '2026-09-02',
+    );
+
+    expect(schedule).toEqual([]);
+  });
+});

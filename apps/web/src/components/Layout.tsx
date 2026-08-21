@@ -23,12 +23,26 @@ export function Layout() {
           <span className="text-lg font-semibold text-slate-900">Health Appointment Clinic</span>
           {session && (
             <nav aria-label="Main" className="flex items-center gap-1">
-              <NavLink to="/appointments" className={NAV_LINK_CLASS}>
-                My appointments
-              </NavLink>
-              <NavLink to="/search" className={NAV_LINK_CLASS}>
-                Find a doctor
-              </NavLink>
+              {session.user.role === 'patient' && (
+                <>
+                  <NavLink to="/appointments" className={NAV_LINK_CLASS}>
+                    My appointments
+                  </NavLink>
+                  <NavLink to="/search" className={NAV_LINK_CLASS}>
+                    Find a doctor
+                  </NavLink>
+                </>
+              )}
+              {session.user.role === 'doctor' && (
+                <>
+                  <NavLink to="/doctor/schedule" className={NAV_LINK_CLASS}>
+                    Schedule
+                  </NavLink>
+                  <NavLink to="/doctor/leaves" className={NAV_LINK_CLASS}>
+                    Days off
+                  </NavLink>
+                </>
+              )}
               <span className="mx-2 text-sm text-slate-500">{session.user.fullName}</span>
               <Button variant="secondary" onClick={() => void logoutCurrentUser()}>
                 Log out

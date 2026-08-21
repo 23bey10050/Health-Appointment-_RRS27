@@ -1,6 +1,6 @@
 import type { PrescriptionItem, SummaryStatus, UrgencyLevel } from '@health/contracts';
 import { alias } from 'drizzle-orm/pg-core';
-import { and, desc, eq, lte } from 'drizzle-orm';
+import { and, desc, eq, lte, sql } from 'drizzle-orm';
 
 import type { Database, DbTransaction } from '../../db/client.js';
 import { appointments, slotHolds, users } from '../../db/schema.js';
@@ -176,6 +176,28 @@ export async function listAppointmentsForPatient(
   return detailQuery(database)
     .where(eq(appointments.patientId, patientId))
     .orderBy(desc(appointments.createdAt));
+}
+
+/**
+ * A doctor's own schedule for a range of their own local calendar days, in visit order rather
+ * than booking order - the ordering a patient's own list uses (newest booked first) would be
+ * useless for someone about to walk into a waiting room. `range` already carries real UTC
+ * instants (see `resolveDoctorDayRange`), so this is a plain range-overlap check on `slot` the
+ * exact same way every other double-booking-adjacent query in this app already does it.
+ */
+export async function listAppointmentsForDoctor(
+  database: Database,
+  doctorId: string,
+  range: { start: Date; end: Date },
+): Promise<AppointmentDetail[]> {
+  return detailQuery(database)
+    .where(
+      and(
+        eq(appointments.doctorId, doctorId),
+        sql`${appointments.slot} && tstzrange(${range.start.toISOString()}, ${range.end.toISOString()}, '[)')`,
+      ),
+    )
+    .orderBy(sql`lower(${appointments.slot})`);
 }
 
 /** The handful of columns both cancelling and submitting notes need to check before writing

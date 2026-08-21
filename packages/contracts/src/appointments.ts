@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { calendarDateSchema } from './doctors.js';
 import { prescriptionItemSchema, summaryStatusSchema, urgencyLevelSchema } from './summaries.js';
 
 /**
@@ -87,3 +88,29 @@ export const cancelAppointmentRequestSchema = z.object({
 });
 
 export type CancelAppointmentRequest = z.infer<typeof cancelAppointmentRequestSchema>;
+
+/** Same 31-day ceiling `availabilityQuerySchema` already uses, for the same reason — a doctor's
+ *  schedule view has no real use for months of empty calendar in one response either. */
+const MAX_SCHEDULE_SPAN_DAYS = 31;
+
+export const scheduleQuerySchema = z
+  .object({
+    from: calendarDateSchema,
+    to: calendarDateSchema,
+  })
+  .refine((value) => value.to >= value.from, {
+    message: 'must not be before "from"',
+    path: ['to'],
+  })
+  .refine(
+    (value) => {
+      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+      const spanDays = Math.round(
+        (Date.parse(`${value.to}T00:00:00Z`) - Date.parse(`${value.from}T00:00:00Z`)) / MS_PER_DAY,
+      );
+      return spanDays <= MAX_SCHEDULE_SPAN_DAYS;
+    },
+    { message: `must not span more than ${MAX_SCHEDULE_SPAN_DAYS} days`, path: ['to'] },
+  );
+
+export type ScheduleQuery = z.infer<typeof scheduleQuerySchema>;

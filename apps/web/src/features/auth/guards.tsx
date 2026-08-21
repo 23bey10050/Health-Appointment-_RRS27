@@ -27,14 +27,17 @@ export function RequireRole({ roles }: { roles: readonly UserRole[] }) {
   return <Outlet />;
 }
 
-/** The one place that decides where a freshly signed-in user actually lands - patients get the
- *  portal this phase builds, everyone else gets an honest "not built yet" rather than a page that
- *  quietly 403s the first thing it tries to load. */
+/** The one place that decides where a freshly signed-in user actually lands - patients and
+ *  doctors each get the portal built for them, and an admin gets an honest "not built yet" rather
+ *  than a page that quietly 403s the first thing it tries to load. */
 export function RoleHome() {
   const { session } = useAuth();
 
   if (session?.user.role === 'patient') {
     return <Navigate to="/appointments" replace />;
+  }
+  if (session?.user.role === 'doctor') {
+    return <Navigate to="/doctor/schedule" replace />;
   }
   return <Navigate to="/portal-coming-soon" replace />;
 }
