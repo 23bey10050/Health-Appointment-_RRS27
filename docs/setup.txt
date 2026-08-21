@@ -556,9 +556,12 @@ if you skip this and it is missing.
 FREE HOSTED SERVICES
 -------------------------------------------------------------------------------
 
-None of these are needed yet. Each one gets wired up in a later phase, and the
-app is built so a missing key means a local stand-in takes over rather than a
-crash. Every service listed is free and none of them ask for a credit card.
+None of these are required to build or demo the project locally - a missing
+key means a local stand-in takes over rather than a crash, for every one of
+them. The last three (Render, Cloudflare Pages, cron-job.org) are for an
+actual production deploy; see DEPLOYING TO PRODUCTION below for the exact
+order to set them up in. Every service listed is free and none of them ask
+for a credit card.
 
   Neon (Postgres)          https://neon.com
       Free tier is permanent, not a trial. Create a project, copy the POOLED
@@ -586,6 +589,87 @@ crash. Every service listed is free and none of them ask for a credit card.
   cron-job.org (keep warm) https://cron-job.org
 
 -------------------------------------------------------------------------------
+DEPLOYING TO PRODUCTION
+-------------------------------------------------------------------------------
+
+Every piece below is free, permanently, with no credit card - not a trial that
+starts asking for one later. Do these in order; each step needs a real URL
+the previous one produced.
+
+  1. Database - Neon (https://neon.com)
+
+     Create a project, then copy the POOLED connection string (not the direct
+     one - the direct one runs out of connections quickly on a free plan).
+     That string is DATABASE_URL for the next step.
+
+  2. API - Render (https://render.com)
+
+     New -> Blueprint -> connect this repo. Render reads render.yaml at the
+     repo root and provisions the service on the free plan automatically -
+     build command, start command and health check path are all already in
+     that file. You will be prompted for the values marked "sync: false" in
+     render.yaml: DATABASE_URL from step 1, and anything from the optional
+     services above you want turned on now (all of them can be left blank
+     and filled in later from the Render dashboard without a redeploy).
+
+     CORS_ORIGINS is also prompted for here but does not have a real answer
+     yet - leave it as the placeholder in .env.local (http://localhost:5173)
+     for this first deploy. Step 4 below comes back and fixes it once the
+     Cloudflare Pages URL actually exists.
+
+     Once deployed, note this service's URL (something like
+     https://health-appointment-api.onrender.com) - the browser app needs it
+     next.
+
+  3. Web app - Cloudflare Pages (https://pages.cloudflare.com)
+
+     Create a project from this same repo, with these exact settings:
+
+       Root directory:    / (the repo root, not apps/web - this is an npm
+                           workspaces monorepo, and npm install has to run
+                           at the root for @health/contracts to resolve)
+       Build command:     npm install && npm run build --workspace @health/contracts
+                           && npm run build --workspace @health/web
+       Build output dir:  apps/web/dist
+
+     Environment variables (Production and Preview both):
+
+       VITE_API_URL = the Render URL from step 2
+
+     Deploy, then note this project's own URL (something like
+     https://health-appointment.pages.dev).
+
+  4. Close the loop: go back to the Render service from step 2 and set
+     CORS_ORIGINS to the Cloudflare Pages URL from step 3 (comma-separate
+     more than one origin if you also keep a custom domain). Save - Render
+     redeploys automatically. The two services now trust each other.
+
+  5. Keep the free API instance warm - cron-job.org (https://cron-job.org)
+
+     Render's free plan spins a service down after 15 minutes of no traffic,
+     and the next request pays a real cold-start cost (the reasoning behind
+     the ColdStartNotice component in the browser app). A free cron-job.org
+     account pinging https://<your-render-url>/health every 10 minutes keeps
+     that from ever happening to a real visitor - /health answers instantly
+     and touches no database, so this ping costs nothing and proves nothing
+     about whether the database itself is reachable (that is what /ready is
+     for, and this ping deliberately does not use it).
+
+  6. Confirm the whole thing for real: open the Cloudflare Pages URL, sign in
+     with a seeded demo account (see DEMO LOGINS above - re-run
+     `npm run db:seed` against the Neon database first if it is empty), and
+     walk through a real booking. Every endpoint documented throughout this
+     file works exactly the same against these URLs as it does against
+     localhost - only the base URL changes.
+
+A full, live-generated API reference - every route, every request and
+response shape, straight from the same Zod schemas each route validates
+against - is always available at GET /openapi.json on either the local or
+the deployed API. Import that URL directly into Postman (File -> Import ->
+Link) to get a complete, always-current request collection with no separate
+file to keep in sync by hand.
+
+-------------------------------------------------------------------------------
 PROJECT LAYOUT
 -------------------------------------------------------------------------------
 
@@ -603,6 +687,8 @@ PROJECT LAYOUT
   scripts/                 Small build and setup helpers, plain Node
   docs/                    This file
   docker-compose.yml       Local Postgres, matching the version Neon runs
+  render.yaml              Render Blueprint for the API - see DEPLOYING TO
+                           PRODUCTION above
 
 Migrations are plain .sql files in apps/api/src/db/migrations. They are applied
 in filename order and their contents are hashed once applied, so editing one

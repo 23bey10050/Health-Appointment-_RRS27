@@ -3,8 +3,13 @@ import { randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import {
+  jsonSchemaTransform,
+  serializerCompiler,
+  validatorCompiler,
+} from 'fastify-type-provider-zod';
 
 import type { AppConfig } from './config/env.js';
 import type { Database } from './db/client.js';
@@ -23,6 +28,7 @@ import type { SummaryProvider } from './modules/summaries/provider.js';
 import { healthRoutes } from './routes/health.js';
 import { registerErrorHandler } from './shared/error-handler.js';
 import { buildLoggerOptions } from './shared/logging.js';
+import { APP_VERSION } from './shared/version.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -73,6 +79,31 @@ export async function buildServer({
   // request validation and response serialization instead of just a type-level decoration.
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // Generated straight from the same Zod schemas every route already validates against, not
+  // hand-maintained separately - a route can never drift out of sync with its own documentation,
+  // because there is only one description of its shape to begin with. `exposeRoute` is left off
+  // deliberately: the plain `/openapi.json` route below is the one URL this project documents,
+  // rather than also shipping the `/documentation/yaml` route the plugin would add on top of it.
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Health Appointment Clinic API',
+        version: APP_VERSION,
+        description:
+          'Import this document into Postman (File -> Import -> Link) or any other OpenAPI-aware client to get a full, always-current request collection.',
+      },
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        },
+      },
+      security: [{ bearerAuth: [] }],
+    },
+    transform: jsonSchemaTransform,
+  });
+
+  app.get('/openapi.json', { schema: { hide: true } }, () => app.swagger());
 
   await app.register(helmet, {
     // This API answers JSON to a separate front-end origin and never serves a page itself, so the
