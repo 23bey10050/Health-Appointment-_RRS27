@@ -4,6 +4,7 @@ import {
   confirmRequestSchema,
   holdRequestSchema,
   holdResponseSchema,
+  submitNotesRequestSchema,
   type Appointment,
   type CancelAppointmentRequest,
   type HoldResponse,
@@ -12,6 +13,7 @@ import { z } from 'zod';
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 
 import { requireRole, requireUser } from '../auth/guards.js';
+import * as summaryService from '../summaries/service.js';
 
 import type { AppointmentDetail, HoldRow } from './repository.js';
 import * as appointmentService from './service.js';
@@ -41,6 +43,15 @@ function toAppointment(detail: AppointmentDetail): Appointment {
     status: detail.status,
     symptoms: detail.symptoms,
     createdAt: detail.createdAt.toISOString(),
+    aiPrevisitStatus: detail.aiPrevisitStatus,
+    aiUrgency: detail.aiUrgency,
+    aiChiefComplaint: detail.aiChiefComplaint,
+    aiSuggestedQuestions: detail.aiSuggestedQuestions,
+    doctorNotes: detail.doctorNotes,
+    prescription: detail.prescription,
+    aiPostvisitStatus: detail.aiPostvisitStatus,
+    aiPostvisitSummary: detail.aiPostvisitSummary,
+    aiPostvisitSteps: detail.aiPostvisitSteps,
   };
 }
 
@@ -90,6 +101,18 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
         request.params.holdId,
         request.body.symptoms,
       );
+
+      // Fired after the response is already on its way, not awaited - a slow AI call must never
+      // make booking itself feel slow. triggerPrevisitSummary swallows its own errors, so there is
+      // nothing here for a rejection to bubble up from.
+      void summaryService.triggerPrevisitSummary(
+        request.server.db,
+        appointment.id,
+        request.body.symptoms,
+        request.server.summaryProviders,
+        request.log,
+      );
+
       return reply.status(201).send(toAppointment(appointment));
     },
   );
@@ -112,7 +135,9 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
   app.get(
     '/:id',
     {
-      preHandler: requireRole('patient', 'admin'),
+      // A doctor can read their own side of this too, as of this phase - they need it to see the
+      // pre-visit triage brief before the appointment starts.
+      preHandler: requireRole('patient', 'doctor', 'admin'),
       schema: { params: idParamSchema, response: { 200: appointmentSchema } },
     },
     async (request, reply) => {
@@ -121,6 +146,37 @@ export const appointmentRoutes: FastifyPluginCallbackZod = (app, _options, done)
         requireUser(request),
         request.params.id,
       );
+      return reply.status(200).send(toAppointment(appointment));
+    },
+  );
+
+  app.post(
+    '/:id/notes',
+    {
+      preHandler: requireRole('doctor'),
+      schema: {
+        params: idParamSchema,
+        body: submitNotesRequestSchema,
+        response: { 200: appointmentSchema },
+      },
+    },
+    async (request, reply) => {
+      const appointment = await appointmentService.submitNotes(
+        request.server.db,
+        requireUser(request).id,
+        request.params.id,
+        request.body.doctorNotes,
+        request.body.prescription,
+      );
+
+      void summaryService.triggerPostvisitSummary(
+        request.server.db,
+        appointment.id,
+        request.body.doctorNotes,
+        request.server.summaryProviders,
+        request.log,
+      );
+
       return reply.status(200).send(toAppointment(appointment));
     },
   );

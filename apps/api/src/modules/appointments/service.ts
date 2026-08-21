@@ -1,4 +1,4 @@
-import type { UserRole } from '@health/contracts';
+import type { PrescriptionItem, UserRole } from '@health/contracts';
 
 import type { Database } from '../../db/client.js';
 import { isPostgresError, PG_ERROR } from '../../db/errors.js';
@@ -17,6 +17,7 @@ import {
   findAppointmentForUpdate,
   findHoldForUpdate,
   listAppointmentsForPatient,
+  saveDoctorNotes,
   type AppointmentDetail,
   type HoldRow,
 } from './repository.js';
@@ -188,9 +189,18 @@ export interface Requester {
   role: UserRole;
 }
 
-/** An admin may look up any appointment for support; anyone else only ever sees their own. */
-function canSeeAppointment(requester: Requester, patientId: string): boolean {
-  return requester.role === 'admin' || requester.id === patientId;
+/** An admin may look up any appointment for support; the patient and the assigned doctor see
+ *  their own side of it - a doctor needs this to read the pre-visit triage brief before a visit,
+ *  and the patient needs it to read the post-visit summary after one. Nobody else sees either. */
+function canSeeAppointment(
+  requester: Requester,
+  appointment: { patientId: string; doctorId: string },
+): boolean {
+  return (
+    requester.role === 'admin' ||
+    requester.id === appointment.patientId ||
+    requester.id === appointment.doctorId
+  );
 }
 
 export async function getAppointment(
@@ -199,7 +209,7 @@ export async function getAppointment(
   appointmentId: string,
 ): Promise<AppointmentDetail> {
   const detail = await findAppointmentDetailById(database, appointmentId);
-  if (!detail || !canSeeAppointment(requester, detail.patientId)) {
+  if (!detail || !canSeeAppointment(requester, detail)) {
     throw new NotFoundError('No appointment with that id.');
   }
   return detail;
@@ -214,7 +224,12 @@ export async function cancelAppointmentByRequester(
   const finalId = await database.transaction(async (tx) => {
     const appointment = await findAppointmentForUpdate(tx, appointmentId);
 
-    if (!appointment || !canSeeAppointment(requester, appointment.patientId)) {
+    // Cancelling stays patient-and-admin only, unlike the read above - a doctor needing to cancel
+    // a patient's booking is a real workflow, but not one this phase's AI summary work touches, so
+    // it is left as it was rather than widened on the side.
+    const canCancel =
+      requester.role === 'admin' || requester.id === appointment?.patientId;
+    if (!appointment || !canCancel) {
       throw new NotFoundError('No appointment with that id.');
     }
     if (appointment.status !== 'confirmed') {
@@ -249,6 +264,49 @@ export async function cancelAppointmentByRequester(
       type: 'cancellation',
       payload: { appointmentId },
       dedupeKey: `cancellation:${appointmentId}:${appointment.doctorId}`,
+    });
+
+    return appointmentId;
+  });
+
+  return mustFindAppointment(database, finalId);
+}
+
+/**
+ * Records what the doctor wrote after a visit and moves the appointment to 'completed'.
+ *
+ * This is the trigger point for the post-visit AI summary, though the actual AI call is not made
+ * here - the route handler fires that afterwards, un-awaited, the same way it fires the pre-visit
+ * call after `confirmHold`. Keeping it out of this function is what let Phase 4's booking code
+ * stay untouched: nothing about this appointment write itself needs to know an AI summary exists.
+ */
+export async function submitNotes(
+  database: Database,
+  doctorId: string,
+  appointmentId: string,
+  doctorNotes: string,
+  prescription: PrescriptionItem[],
+): Promise<AppointmentDetail> {
+  const finalId = await database.transaction(async (tx) => {
+    const appointment = await findAppointmentForUpdate(tx, appointmentId);
+
+    if (!appointment || appointment.doctorId !== doctorId) {
+      throw new NotFoundError('No appointment with that id.');
+    }
+    if (appointment.status !== 'confirmed') {
+      throw new ConflictError(
+        'APPOINTMENT_NOT_ACTIVE',
+        `This appointment is already ${appointment.status.replace('_', ' ')}, so notes cannot be added.`,
+      );
+    }
+
+    await saveDoctorNotes(tx, appointmentId, doctorNotes, prescription);
+
+    await writeAuditEntry(tx, {
+      actorId: doctorId,
+      action: 'appointment_notes_submitted',
+      entityType: 'appointment',
+      entityId: appointmentId,
     });
 
     return appointmentId;

@@ -1,3 +1,4 @@
+import type { PrescriptionItem, SummaryStatus, UrgencyLevel } from '@health/contracts';
 import { alias } from 'drizzle-orm/pg-core';
 import { and, desc, eq, lte } from 'drizzle-orm';
 
@@ -94,6 +95,15 @@ export interface AppointmentDetail {
   status: 'confirmed' | 'completed' | 'cancelled' | 'no_show';
   symptoms: string | null;
   createdAt: Date;
+  aiPrevisitStatus: SummaryStatus;
+  aiUrgency: UrgencyLevel | null;
+  aiChiefComplaint: string | null;
+  aiSuggestedQuestions: string[] | null;
+  doctorNotes: string | null;
+  prescription: PrescriptionItem[] | null;
+  aiPostvisitStatus: SummaryStatus;
+  aiPostvisitSummary: string | null;
+  aiPostvisitSteps: string[] | null;
 }
 
 const doctorUser = alias(users, 'doctor_user');
@@ -110,6 +120,15 @@ function detailColumns() {
     status: appointments.status,
     symptoms: appointments.symptomsText,
     createdAt: appointments.createdAt,
+    aiPrevisitStatus: appointments.aiPrevisitStatus,
+    aiUrgency: appointments.aiUrgency,
+    aiChiefComplaint: appointments.aiChiefComplaint,
+    aiSuggestedQuestions: appointments.aiSuggestedQuestions,
+    doctorNotes: appointments.doctorNotes,
+    prescription: appointments.prescription,
+    aiPostvisitStatus: appointments.aiPostvisitStatus,
+    aiPostvisitSummary: appointments.aiPostvisitSummary,
+    aiPostvisitSteps: appointments.aiPostvisitSteps,
   };
 }
 
@@ -159,7 +178,9 @@ export async function listAppointmentsForPatient(
     .orderBy(desc(appointments.createdAt));
 }
 
-export interface AppointmentForCancel {
+/** The handful of columns both cancelling and submitting notes need to check before writing
+ *  anything - who owns this appointment and what state it is already in. */
+export interface AppointmentForUpdate {
   id: string;
   doctorId: string;
   patientId: string;
@@ -169,7 +190,7 @@ export interface AppointmentForCancel {
 export async function findAppointmentForUpdate(
   tx: DbTransaction,
   appointmentId: string,
-): Promise<AppointmentForCancel | undefined> {
+): Promise<AppointmentForUpdate | undefined> {
   const [row] = await tx
     .select({
       id: appointments.id,
@@ -198,6 +219,25 @@ export async function cancelAppointment(
       cancelledAt: new Date(),
       cancelledBy,
       cancellationReason: reason,
+    })
+    .where(eq(appointments.id, appointmentId));
+}
+
+/** Marks the visit done and records what the doctor wrote. This is the one place an appointment
+ *  ever moves to 'completed' - nothing else in the app currently makes that transition. */
+export async function saveDoctorNotes(
+  tx: DbTransaction,
+  appointmentId: string,
+  doctorNotes: string,
+  prescription: PrescriptionItem[],
+): Promise<void> {
+  await tx
+    .update(appointments)
+    .set({
+      status: 'completed',
+      doctorNotes,
+      prescription,
+      notesSubmittedAt: new Date(),
     })
     .where(eq(appointments.id, appointmentId));
 }

@@ -1,13 +1,16 @@
 import type { Appointment, HoldResponse } from '@health/contracts';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Database } from '../src/db/client.js';
+import { appointments } from '../src/db/schema.js';
+import { signAccessToken } from '../src/modules/auth/tokens.js';
 
 import { createTestDatabase, resetDatabase } from './helpers/database.js';
 import { addWorkingHours, createDoctor } from './helpers/fixtures.js';
 import { createUserWithToken } from './helpers/roles.js';
-import { buildTestServer } from './helpers/test-server.js';
+import { buildTestConfig, buildTestServer } from './helpers/test-server.js';
 
 let database: Database;
 let app: FastifyInstance;
@@ -16,6 +19,10 @@ let secondPatient: { id: string; token: string };
 let doctorToken: string;
 let adminToken: string;
 let doctorId: string;
+/** A token for `doctorId` itself, not just any doctor-role account - the one actually assigned
+ *  to appointments booked in these tests, needed for the "assigned doctor can read/complete their
+ *  own appointment" checks below. */
+let assignedDoctorToken: string;
 
 // 2026-09-01 is a Tuesday (Postgres EXTRACT(DOW ...) = 2), the same fixed date the availability
 // and service-level booking suites already confirmed against the running database.
@@ -42,7 +49,39 @@ beforeEach(async () => {
   await addWorkingHours(database, doctorId, [
     { dayOfWeek: 2, startTime: '09:00', endTime: '10:00' },
   ]);
+
+  const testConfig = buildTestConfig();
+  assignedDoctorToken = signAccessToken(
+    { sub: doctorId, role: 'doctor' },
+    { secret: testConfig.auth.jwtAccessSecret, ttlSeconds: testConfig.auth.accessTokenTtlSeconds },
+  ).token;
 });
+
+/**
+ * Polls the row directly rather than through the API - the AI trigger fires after the HTTP
+ * response has already gone out, on purpose, so there is no request left to wait on by the time a
+ * test could ask for one. With no GROQ_API_KEY or GEMINI_API_KEY set anywhere in this suite's
+ * environment, the chain never makes a network call and settles in a few milliseconds; the
+ * two-second budget here is headroom for a slow CI machine, not an expectation of it taking that
+ * long.
+ */
+async function waitForAiStatus(
+  column: 'aiPrevisitStatus' | 'aiPostvisitStatus',
+  appointmentId: string,
+  expected: string,
+): Promise<void> {
+  const deadline = Date.now() + 2000;
+  for (;;) {
+    const [row] = await database.db.select().from(appointments).where(eq(appointments.id, appointmentId));
+    if (row?.[column] === expected) {
+      return;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for ${column} to become "${expected}", last saw "${row?.[column]}".`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
 afterEach(async () => {
   await app.close();
@@ -259,6 +298,140 @@ describe('GET /appointments/mine and /appointments/:id', () => {
     expect(asOwner.statusCode).toBe(200);
     expect(asStranger.statusCode).toBe(404);
     expect(asAdmin.statusCode).toBe(200);
+  });
+
+  it('the assigned doctor can read it too, but an unrelated doctor cannot', async () => {
+    const appointment = await bookOne();
+
+    const asAssignedDoctor = await app.inject({
+      method: 'GET',
+      url: `/appointments/${appointment.id}`,
+      headers: authed(assignedDoctorToken),
+    });
+    const asUnrelatedDoctor = await app.inject({
+      method: 'GET',
+      url: `/appointments/${appointment.id}`,
+      headers: authed(doctorToken),
+    });
+
+    expect(asAssignedDoctor.statusCode).toBe(200);
+    expect(asUnrelatedDoctor.statusCode).toBe(404);
+  });
+
+  it('eventually carries a pre-visit AI status - falling back to the template, since this suite configures no AI provider keys', async () => {
+    const appointment = await bookOne();
+
+    await waitForAiStatus('aiPrevisitStatus', appointment.id, 'unavailable');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/appointments/${appointment.id}`,
+      headers: authed(patient.token),
+    });
+    const body = response.json<Appointment>();
+    expect(body.aiPrevisitStatus).toBe('unavailable');
+    expect(body.aiChiefComplaint).toMatch(/could not be generated automatically/);
+  });
+});
+
+describe('POST /appointments/:id/notes', () => {
+  async function bookOne(): Promise<Appointment> {
+    const hold = (await holdTheSlot(patient.token)).json<HoldResponse>();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/appointments/${hold.holdId}/confirm`,
+      headers: authed(patient.token),
+      payload: { symptoms: 'A routine checkup for an ongoing condition.' },
+    });
+    return response.json<Appointment>();
+  }
+
+  it("the assigned doctor can submit notes, which completes the visit and stores the prescription", async () => {
+    const appointment = await bookOne();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/appointments/${appointment.id}/notes`,
+      headers: authed(assignedDoctorToken),
+      payload: {
+        doctorNotes: 'Mild seasonal allergy. Advised rest and fluids.',
+        prescription: [
+          { drug: 'Cetirizine', dosage: '10mg', timesPerDay: 1, durationDays: 5 },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<Appointment>();
+    expect(body.status).toBe('completed');
+    expect(body.doctorNotes).toBe('Mild seasonal allergy. Advised rest and fluids.');
+    expect(body.prescription).toEqual([
+      { drug: 'Cetirizine', dosage: '10mg', timesPerDay: 1, durationDays: 5 },
+    ]);
+  });
+
+  it('eventually carries a post-visit AI status - falling back to the template, since this suite configures no AI provider keys', async () => {
+    const appointment = await bookOne();
+
+    await app.inject({
+      method: 'POST',
+      url: `/appointments/${appointment.id}/notes`,
+      headers: authed(assignedDoctorToken),
+      payload: { doctorNotes: 'Mild seasonal allergy. Advised rest and fluids.' },
+    });
+
+    await waitForAiStatus('aiPostvisitStatus', appointment.id, 'unavailable');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/appointments/${appointment.id}`,
+      headers: authed(patient.token),
+    });
+    expect(response.json<Appointment>().aiPostvisitSummary).toMatch(/could not be generated automatically/);
+  });
+
+  it('an unrelated doctor gets 404, not a hint that the appointment exists', async () => {
+    const appointment = await bookOne();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/appointments/${appointment.id}/notes`,
+      headers: authed(doctorToken),
+      payload: { doctorNotes: 'Should never be reachable.' },
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('a patient account cannot submit notes at all', async () => {
+    const appointment = await bookOne();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/appointments/${appointment.id}/notes`,
+      headers: authed(patient.token),
+      payload: { doctorNotes: 'Should never be reachable.' },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('409s on an appointment that is not active any more', async () => {
+    const appointment = await bookOne();
+    await app.inject({
+      method: 'DELETE',
+      url: `/appointments/${appointment.id}`,
+      headers: authed(patient.token),
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/appointments/${appointment.id}/notes`,
+      headers: authed(assignedDoctorToken),
+      payload: { doctorNotes: 'The visit never happened.' },
+    });
+
+    expect(response.statusCode).toBe(409);
   });
 });
 

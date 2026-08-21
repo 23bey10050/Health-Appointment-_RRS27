@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { prescriptionItemSchema, summaryStatusSchema, urgencyLevelSchema } from './summaries.js';
+
 /**
  * How far ahead a patient may reserve a slot. Ninety days is a generous booking horizon for a
  * clinic and, like the 31-day cap on browsing availability, exists mainly to keep a stray or
@@ -63,6 +65,19 @@ export const appointmentSchema = z.object({
   status: appointmentStatusSchema,
   symptoms: z.string().nullable(),
   createdAt: z.string().datetime(),
+
+  // Pre-visit: the doctor's triage brief, built from the patient's own symptom text.
+  aiPrevisitStatus: summaryStatusSchema,
+  aiUrgency: urgencyLevelSchema.nullable(),
+  aiChiefComplaint: z.string().nullable(),
+  aiSuggestedQuestions: z.array(z.string()).nullable(),
+
+  // What the doctor wrote after the visit, plus its plain-language rewrite for the patient.
+  doctorNotes: z.string().nullable(),
+  prescription: z.array(prescriptionItemSchema).nullable(),
+  aiPostvisitStatus: summaryStatusSchema,
+  aiPostvisitSummary: z.string().nullable(),
+  aiPostvisitSteps: z.array(z.string()).nullable(),
 });
 
 export type Appointment = z.infer<typeof appointmentSchema>;

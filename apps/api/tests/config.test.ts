@@ -98,4 +98,20 @@ describe('loadConfig', () => {
     expect(config.email.brevoApiKey).toBe('a-real-looking-key');
     expect(config.email.senderEmail).toBe('noreply@clinic.test');
   });
+
+  it('runs with neither AI account configured - the deterministic template takes over', () => {
+    const config = loadConfig(MINIMUM_ENV);
+
+    expect(config.ai.groqApiKey).toBeUndefined();
+    expect(config.ai.geminiApiKey).toBeUndefined();
+  });
+
+  it('accepts either AI key on its own, or both together', () => {
+    const groqOnly = loadConfig({ ...MINIMUM_ENV, GROQ_API_KEY: 'a-groq-key' });
+    const both = loadConfig({ ...MINIMUM_ENV, GROQ_API_KEY: 'a-groq-key', GEMINI_API_KEY: 'a-gemini-key' });
+
+    expect(groqOnly.ai.groqApiKey).toBe('a-groq-key');
+    expect(groqOnly.ai.geminiApiKey).toBeUndefined();
+    expect(both.ai.geminiApiKey).toBe('a-gemini-key');
+  });
 });

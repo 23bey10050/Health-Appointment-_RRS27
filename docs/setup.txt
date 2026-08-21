@@ -278,6 +278,62 @@ To watch the raw table directly:
       -c "SELECT recipient_id, type, status, attempts FROM notification_outbox;"
 
 -------------------------------------------------------------------------------
+AI SUMMARIES
+-------------------------------------------------------------------------------
+
+Two moments in a visit get an AI-written summary: booking one queues a pre-visit triage brief for
+the doctor, and a doctor submitting their notes queues a plain-language summary for the patient.
+Both are fired after their own request has already answered - a slow or failing AI call never
+makes booking or notes submission feel slow - so the appointment you get back from either call
+still shows the previous status for a moment. Fetch the appointment again a second later to see
+the finished result.
+
+With no GROQ_API_KEY or GEMINI_API_KEY set (see .env.local), both moments fall back to an honest,
+fixed message telling the reader to check the patient's or doctor's own text instead - a
+completely normal way to run and demo the whole project. Set either key, or both, to see a real
+summary; Groq goes first with one retry, then Gemini, and if both are configured and both happen
+to fail, the same fallback message is used.
+
+  Book an appointment as a patient, the same as in the section above, then check on it:
+
+    curl "http://localhost:4000/appointments/<appointmentId>" \
+      -H "Authorization: Bearer <patientAccessToken>"
+
+  aiPrevisitStatus moves from "not_requested" to "pending" to either "ready" (a real summary, with
+  aiUrgency / aiChiefComplaint / aiSuggestedQuestions filled in) or "unavailable" (the fallback
+  message, in aiChiefComplaint). A doctor can fetch the same appointment to read it before the
+  visit - this is the one case where GET /appointments/:id works for a doctor at all, since it is
+  their own side of the same visit:
+
+    curl "http://localhost:4000/appointments/<appointmentId>" \
+      -H "Authorization: Bearer <doctorAccessToken>"
+
+  After the visit, the doctor submits their notes and a prescription. This also moves the
+  appointment to "completed" - it is the only thing in the app that does:
+
+    curl -X POST "http://localhost:4000/appointments/<appointmentId>/notes" \
+      -H "Authorization: Bearer <doctorAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "doctorNotes": "Mild seasonal allergy. Advised rest and fluids.",
+        "prescription": [
+          {"drug": "Cetirizine", "dosage": "10mg", "timesPerDay": 1, "durationDays": 5}
+        ]
+      }'
+
+  A moment later, aiPostvisitStatus reaches "ready" or "unavailable" the same way, with
+  aiPostvisitSummary and aiPostvisitSteps filled in on success. The AI is never asked to restate
+  the prescription itself - the doctor's own prescription field is already the exact, correct
+  source for drug names and doses, so asking a model to repeat them back would only add a chance
+  of it getting one wrong.
+
+  Every attempt - which provider, how long it took, and whether it worked - is written to the
+  audit log, including the case where neither key is configured at all:
+
+    docker exec -it health-appointment-db psql -U health -d health_appointment \
+      -c "SELECT action, metadata FROM audit_log WHERE action LIKE '%summary_attempt%';"
+
+-------------------------------------------------------------------------------
 RUNNING THE TESTS
 -------------------------------------------------------------------------------
 

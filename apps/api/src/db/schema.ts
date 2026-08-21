@@ -1,3 +1,4 @@
+import type { PrescriptionItem } from '@health/contracts';
 import {
   bigint,
   boolean,
@@ -189,16 +190,6 @@ export const appointments = pgTable(
   },
   (table) => [index('idx_appointments_patient').on(table.patientId, table.createdAt)],
 );
-
-/** One line of a prescription, as written by the doctor and read by the reminder builder. */
-export interface PrescriptionItem {
-  drug: string;
-  dosage: string;
-  /** How many times a day the patient takes it. */
-  timesPerDay: number;
-  durationDays: number;
-  instructions?: string;
-}
 
 export const slotHolds = pgTable(
   'slot_holds',

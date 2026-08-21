@@ -61,6 +61,12 @@ const envSchema = z
     BREVO_API_KEY: z.string().min(1).optional(),
     BREVO_SENDER_EMAIL: z.string().email().optional(),
     BREVO_SENDER_NAME: z.string().min(1).max(100).default('Health Appointment Clinic'),
+
+    // Same "optional, with a working fallback" shape as email above. With neither key set, a
+    // booking or a submitted note still gets a deterministic template instead of a real AI
+    // summary - a normal, fully supported way to run this project without signing up for anything.
+    GROQ_API_KEY: z.string().min(1).optional(),
+    GEMINI_API_KEY: z.string().min(1).optional(),
   })
   .refine((env) => !env.BREVO_API_KEY || env.BREVO_SENDER_EMAIL, {
     message: 'is required once BREVO_API_KEY is set, so Brevo has a "from" address to send with',
@@ -102,6 +108,11 @@ export interface AppConfig {
     readonly brevoApiKey: string | undefined;
     readonly senderEmail: string | undefined;
     readonly senderName: string;
+  };
+  readonly ai: {
+    /** Undefined means "no account configured" — that provider is simply left out of the chain. */
+    readonly groqApiKey: string | undefined;
+    readonly geminiApiKey: string | undefined;
   };
 }
 
@@ -163,6 +174,10 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       brevoApiKey: env.BREVO_API_KEY,
       senderEmail: env.BREVO_SENDER_EMAIL,
       senderName: env.BREVO_SENDER_NAME,
+    }),
+    ai: Object.freeze({
+      groqApiKey: env.GROQ_API_KEY,
+      geminiApiKey: env.GEMINI_API_KEY,
     }),
   });
 }

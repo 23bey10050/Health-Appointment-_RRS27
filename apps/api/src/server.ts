@@ -12,6 +12,8 @@ import { appointmentRoutes } from './modules/appointments/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { adminDoctorRoutes, publicDoctorRoutes } from './modules/doctors/routes.js';
 import { adminNotificationRoutes } from './modules/notifications/routes.js';
+import { buildSummaryProviders } from './modules/summaries/setup.js';
+import type { SummaryProvider } from './modules/summaries/provider.js';
 import { healthRoutes } from './routes/health.js';
 import { registerErrorHandler } from './shared/error-handler.js';
 import { buildLoggerOptions } from './shared/logging.js';
@@ -20,12 +22,16 @@ declare module 'fastify' {
   interface FastifyInstance {
     config: AppConfig;
     db: Database;
+    summaryProviders: readonly SummaryProvider[];
   }
 }
 
 export interface ServerDependencies {
   config: AppConfig;
   db: Database;
+  /** Defaults to whatever `AppConfig.ai` says is configured. A test overrides this with fakes so
+   *  it never makes a real Groq or Gemini call just from building a server with `inject()`. */
+  summaryProviders?: readonly SummaryProvider[];
 }
 
 /**
@@ -35,7 +41,11 @@ export interface ServerDependencies {
  * same server a real deploy does, passes a stand-in database, and fires requests straight at it
  * with `inject` — no port to bind, nothing to clash with a second test running beside it.
  */
-export async function buildServer({ config, db }: ServerDependencies): Promise<FastifyInstance> {
+export async function buildServer({
+  config,
+  db,
+  summaryProviders,
+}: ServerDependencies): Promise<FastifyInstance> {
   const app = Fastify({
     logger: buildLoggerOptions(config),
     // Every request gets an id that appears in the logs and in any error we return, so a user
@@ -51,6 +61,7 @@ export async function buildServer({ config, db }: ServerDependencies): Promise<F
 
   app.decorate('config', config);
   app.decorate('db', db);
+  app.decorate('summaryProviders', summaryProviders ?? buildSummaryProviders(config));
 
   // Every route's schema is a Zod object; these two compilers are what turns that into actual
   // request validation and response serialization instead of just a type-level decoration.
