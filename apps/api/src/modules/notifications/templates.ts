@@ -120,6 +120,52 @@ function reminder(ctx: RenderContext, howSoon: string): RenderedEmail {
   };
 }
 
+/** A leave-triggered cancellation, worded differently from `cancellationForPatient` on purpose -
+ *  the patient did not choose this, the doctor's own availability did, and the copy says so
+ *  instead of reading like the patient cancelled their own visit. The leave's own reason (if an
+ *  admin gave one) stays out of this - it is internal clinic record-keeping, not something owed
+ *  to the patient, who only needs to know the appointment is no longer happening and why in the
+ *  broadest sense. */
+function leaveConflictForPatient(ctx: RenderContext): RenderedEmail {
+  const time = formatSlotTime(ctx.slot.start, ctx.patientTimezone);
+  const lines = [
+    `Hi ${ctx.patientName},`,
+    `Your appointment with ${ctx.doctorName} on ${time} has had to be cancelled - ${ctx.doctorName} is unavailable that day.`,
+    `You can book a new appointment with ${ctx.doctorName} any time.`,
+  ];
+  return {
+    subject: `Your appointment with ${ctx.doctorName} needs to be rebooked`,
+    html: wrapHtml(lines),
+    text: wrapText(lines),
+  };
+}
+
+export interface MedicationReminderDetails {
+  drugName: string;
+  dosage: string | null;
+  instructions: string | null;
+}
+
+/** Always the patient's own reminder - nobody else's medication schedule is this app's business
+ *  to send. Kept out of `renderNotification` below because it needs more than a `RenderContext`
+ *  can carry: which specific drug and dose this one reminder is about. */
+export function renderMedicationReminder(
+  ctx: RenderContext,
+  medication: MedicationReminderDetails,
+): RenderedEmail {
+  const dose = medication.dosage ? `${medication.drugName} (${medication.dosage})` : medication.drugName;
+  const lines = [
+    `Hi ${ctx.patientName},`,
+    `Time to take your ${dose}.`,
+    ...(medication.instructions ? [medication.instructions] : []),
+  ];
+  return {
+    subject: `Reminder: take your ${medication.drugName}`,
+    html: wrapHtml(lines),
+    text: wrapText(lines),
+  };
+}
+
 /**
  * The one place that decides which template a given outbox row gets. `side` is not stored on the
  * row itself — the worker works it out by comparing the row's `recipientId` against the
@@ -142,9 +188,13 @@ export function renderNotification(
       return reminder(ctx, 'tomorrow');
     case 'reminder_1h':
       return reminder(ctx, 'in about an hour');
-    case 'reschedule':
     case 'leave_conflict':
+      return leaveConflictForPatient(ctx);
     case 'medication_reminder':
+      // Rendered through `renderMedicationReminder` instead, which needs more than a
+      // RenderContext carries - reaching this case means the worker's own dispatch has a bug.
+      throw new Error('medication_reminder is rendered through renderMedicationReminder, not here.');
+    case 'reschedule':
     case 'postvisit_summary':
       // Queued by a phase later than this one, whose job is to add the matching template here
       // alongside it — this error is the intended way to notice that step got missed, not a bug.

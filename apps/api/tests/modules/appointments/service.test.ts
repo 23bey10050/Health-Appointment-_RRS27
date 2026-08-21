@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Database } from '../../../src/db/client.js';
-import { auditLog, notificationOutbox, slotHolds } from '../../../src/db/schema.js';
+import { auditLog, medicationReminders, notificationOutbox, slotHolds } from '../../../src/db/schema.js';
 import * as appointmentService from '../../../src/modules/appointments/service.js';
 import { AppError } from '../../../src/shared/errors.js';
 import { createTestDatabase, resetDatabase } from '../../helpers/database.js';
@@ -542,5 +542,48 @@ describe('cancelAppointmentByRequester', () => {
     );
 
     expect(cancelled.status).toBe('cancelled');
+  });
+});
+
+describe('submitNotes', () => {
+  async function bookOne(patientTimezone?: string): Promise<{
+    doctorId: string;
+    patientId: string;
+    appointmentId: string;
+  }> {
+    const doctorId = await createBookableDoctor();
+    const patientId = await createPatient(database, patientTimezone ? { timezone: patientTimezone } : {});
+    const hold = await appointmentService.holdSlot(database, patientId, doctorId, SLOT_START);
+    const appointment = await appointmentService.confirmHold(database, patientId, hold.id, 'a visit');
+    return { doctorId, patientId, appointmentId: appointment.id };
+  }
+
+  it('schedules medication reminders for a prescription in the same call, correctly counted', async () => {
+    const { doctorId, patientId, appointmentId } = await bookOne();
+
+    await appointmentService.submitNotes(database, doctorId, appointmentId, 'Notes.', [
+      { drug: 'Ibuprofen', dosage: '400mg', timesPerDay: 3, durationDays: 5 },
+      { drug: 'Cetirizine', dosage: '10mg', timesPerDay: 1, durationDays: 5 },
+    ]);
+
+    const rows = await database.db
+      .select()
+      .from(medicationReminders)
+      .where(eq(medicationReminders.appointmentId, appointmentId));
+    expect(rows.every((row) => row.patientId === patientId)).toBe(true);
+    expect(rows.filter((row) => row.drugName === 'Ibuprofen')).toHaveLength(15);
+    expect(rows.filter((row) => row.drugName === 'Cetirizine')).toHaveLength(5);
+  });
+
+  it('schedules nothing when the prescription is empty - notes without medication are common', async () => {
+    const { doctorId, appointmentId } = await bookOne();
+
+    await appointmentService.submitNotes(database, doctorId, appointmentId, 'Notes only, no medication.', []);
+
+    const rows = await database.db
+      .select()
+      .from(medicationReminders)
+      .where(eq(medicationReminders.appointmentId, appointmentId));
+    expect(rows).toHaveLength(0);
   });
 });

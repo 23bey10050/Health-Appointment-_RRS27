@@ -4,6 +4,8 @@ import type { Database } from '../../db/client.js';
 import { isPostgresError, PG_ERROR } from '../../db/errors.js';
 import { slotOf, type TimeRange } from '../../db/types/time-range.js';
 import { findAvailableSlots, findDoctorSchedulingContext } from '../doctors/availability.js';
+import { findUserTimezone } from '../medications/repository.js';
+import { scheduleMedicationReminders } from '../medications/service.js';
 import { writeAuditEntry } from '../../shared/audit.js';
 import { ConflictError, NotFoundError } from '../../shared/errors.js';
 import { queueNotification } from '../../shared/outbox.js';
@@ -350,6 +352,20 @@ export async function submitNotes(
       entityType: 'appointment',
       entityId: appointmentId,
     });
+
+    // In the same transaction as the prescription itself - a visit whose notes saved but whose
+    // reminders silently failed to schedule is a worse outcome than either succeeding together,
+    // and expanding a schedule is a fast, local computation with nothing external to justify
+    // deferring it the way an actual reminder email is deferred to the outbox.
+    if (prescription.length > 0) {
+      const patientTimezone = await findUserTimezone(tx, appointment.patientId);
+      await scheduleMedicationReminders(tx, {
+        appointmentId,
+        patientId: appointment.patientId,
+        patientTimezone,
+        prescription,
+      });
+    }
 
     return appointmentId;
   });

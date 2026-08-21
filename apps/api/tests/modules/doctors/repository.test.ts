@@ -236,7 +236,7 @@ describe('leaves', () => {
     const adminId = await createDoctor(database);
 
     await repository.addLeave(
-      database,
+      database.db,
       doctorId,
       { leaveDate: '2026-12-25', reason: 'Holiday' },
       adminId,
@@ -251,10 +251,10 @@ describe('leaves', () => {
   it('refuses a second leave row for the same doctor and date', async () => {
     const doctorId = await createDoctor(database);
     const adminId = await createDoctor(database);
-    await repository.addLeave(database, doctorId, { leaveDate: '2026-12-25' }, adminId);
+    await repository.addLeave(database.db, doctorId, { leaveDate: '2026-12-25' }, adminId);
 
     await expect(
-      repository.addLeave(database, doctorId, { leaveDate: '2026-12-25' }, adminId),
+      repository.addLeave(database.db, doctorId, { leaveDate: '2026-12-25' }, adminId),
     ).rejects.toSatisfy((error: unknown) => sqlStateOf(error) === UNIQUE_VIOLATION);
   });
 
@@ -263,7 +263,7 @@ describe('leaves', () => {
     const doctorB = await createDoctor(database);
     const adminId = await createDoctor(database);
     const leave = await repository.addLeave(
-      database,
+      database.db,
       doctorA,
       { leaveDate: '2026-12-25' },
       adminId,

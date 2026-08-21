@@ -3,6 +3,7 @@ import {
   availabilityResponseSchema,
   createDoctorRequestSchema,
   createLeaveRequestSchema,
+  createLeaveResponseSchema,
   doctorSchema,
   leaveSchema,
   listDoctorsQuerySchema,
@@ -11,6 +12,7 @@ import {
   workingHourInputSchema,
   workingHourSchema,
   type AvailabilityResponse,
+  type CreateLeaveResponse,
   type Doctor,
   type DoctorSummary,
   type Leave,
@@ -55,6 +57,10 @@ function toDoctor(doctor: DoctorRow, workingHours: WorkingHourRow[]): Doctor {
 
 function toLeave(row: LeaveRow): Leave {
   return { id: row.id, leaveDate: row.leaveDate, reason: row.reason };
+}
+
+function toCreateLeaveResponse(created: doctorService.LeaveCreated): CreateLeaveResponse {
+  return { ...toLeave(created.leave), cancelledAppointments: created.cancelledAppointments };
 }
 
 function toSlot(slot: AvailabilitySlot): { start: string; end: string } {
@@ -152,7 +158,7 @@ export const adminDoctorRoutes: FastifyPluginCallbackZod = (app, _options, done)
       schema: {
         params: idParamSchema,
         body: createLeaveRequestSchema,
-        response: { 201: leaveSchema },
+        response: { 201: createLeaveResponseSchema },
       },
     },
     async (request, reply) => {
@@ -162,7 +168,7 @@ export const adminDoctorRoutes: FastifyPluginCallbackZod = (app, _options, done)
         request.body,
         requireUser(request).id,
       );
-      return reply.status(201).send(toLeave(created));
+      return reply.status(201).send(toCreateLeaveResponse(created));
     },
   );
 

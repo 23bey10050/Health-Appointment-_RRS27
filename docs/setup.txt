@@ -379,6 +379,41 @@ eventually reaching the same dead-letter dashboard as an email that could not be
 Retrying a dead-lettered calendar row after reconnecting works exactly like retrying an email one.
 
 -------------------------------------------------------------------------------
+MEDICATION REMINDERS AND LEAVE DAYS
+-------------------------------------------------------------------------------
+
+Submitting doctor's notes with a prescription (see "AI SUMMARIES" above for the notes endpoint
+itself) does one more thing: it expands each drug into a full course of reminders, one
+row per dose, in medication_reminders. "Three times a day for five days" becomes exactly fifteen
+rows, spread across 08:00 / 14:00 / 20:00 each day rather than the full 24 hours, so nobody gets
+woken at 3 AM by a naive even split - and every one of those times is computed in the patient's
+own timezone, correctly, across a daylight-saving change if the course happens to cross one.
+
+    docker exec -it health-appointment-db psql -U health -d health_appointment \
+      -c "SELECT drug_name, scheduled_at FROM medication_reminders WHERE appointment_id = '<id>' ORDER BY scheduled_at;"
+
+A background tick every five minutes looks for reminders whose time has come and queues one
+notification_outbox row each - sending itself is left to the same outbox worker every other
+notification already goes through, so a medication reminder is just as durable against a crash as
+a booking confirmation is. Running the same prescription through twice never creates a second set
+of reminders; a unique constraint on the appointment, drug, and exact time makes re-running it a
+no-op.
+
+Marking a doctor's leave day cancels whatever is already booked on it, in one transaction with the
+leave itself - either both happen or neither does:
+
+    curl -X POST "http://localhost:4000/admin/doctors/<doctorId>/leaves" \
+      -H "Authorization: Bearer <adminAccessToken>" \
+      -H "Content-Type: application/json" \
+      -d '{"leaveDate": "2026-12-25", "reason": "Holiday"}'
+
+The response's cancelledAppointments field says how many patients were affected. Each of them gets
+a "needs to be rebooked" email - worded as the doctor's own unavailability, not as something the
+patient chose - and both sides' calendars lose the event, the same way any other cancellation's
+calendar cleanup works. The doctor does not get an email about their own leave; their calendar
+still gets cleaned up.
+
+-------------------------------------------------------------------------------
 RUNNING THE TESTS
 -------------------------------------------------------------------------------
 

@@ -9,7 +9,9 @@ import type {
 
 import type { Database } from '../../db/client.js';
 import { isPostgresError, PG_ERROR } from '../../db/errors.js';
+import { writeAuditEntry } from '../../shared/audit.js';
 import { ConflictError, NotFoundError } from '../../shared/errors.js';
+import { queueNotification } from '../../shared/outbox.js';
 
 import { findAvailableSlots, type AvailabilitySlot } from './availability.js';
 import * as repository from './repository.js';
@@ -132,16 +134,95 @@ export async function listLeaves(database: Database, doctorId: string): Promise<
   return repository.listLeaves(database, doctorId);
 }
 
+const LEAVE_CANCELLATION_REASON = 'The doctor became unavailable on this date.';
+
+export interface LeaveCreated {
+  leave: LeaveRow;
+  cancelledAppointments: number;
+}
+
+/**
+ * Marks a leave day and, in the same transaction, cancels whatever it conflicts with.
+ *
+ * Locking the affected appointments with `FOR UPDATE` before touching any of them is what makes
+ * this safe against a patient racing to book or cancel one of the very appointments this function
+ * is about to cancel out from under them - by the time this transaction commits, there is no
+ * window where the leave day exists but an affected appointment does not yet know it is cancelled.
+ */
 export async function addLeave(
   database: Database,
   doctorId: string,
   input: CreateLeaveRequest,
   createdByAdminId: string,
-): Promise<LeaveRow> {
+): Promise<LeaveCreated> {
   await ensureDoctorExists(database, doctorId);
 
   try {
-    return await repository.addLeave(database, doctorId, input, createdByAdminId);
+    return await database.transaction(async (tx) => {
+      const leave = await repository.addLeave(tx, doctorId, input, createdByAdminId);
+
+      await writeAuditEntry(tx, {
+        actorId: createdByAdminId,
+        action: 'doctor_leave_added',
+        entityType: 'doctor',
+        entityId: doctorId,
+        metadata: { leaveDate: input.leaveDate },
+      });
+
+      const conflicts = await repository.findAndLockConfirmedAppointmentsOnDate(
+        tx,
+        doctorId,
+        input.leaveDate,
+      );
+
+      for (const conflict of conflicts) {
+        await repository.cancelAppointmentForLeave(
+          tx,
+          conflict.appointmentId,
+          createdByAdminId,
+          LEAVE_CANCELLATION_REASON,
+        );
+
+        await writeAuditEntry(tx, {
+          actorId: createdByAdminId,
+          action: 'appointment_cancelled_for_leave',
+          entityType: 'appointment',
+          entityId: conflict.appointmentId,
+          metadata: { leaveDate: input.leaveDate },
+        });
+
+        await queueNotification(tx, {
+          appointmentId: conflict.appointmentId,
+          recipientId: conflict.patientId,
+          channel: 'email',
+          type: 'leave_conflict',
+          payload: { appointmentId: conflict.appointmentId },
+          dedupeKey: `leave_conflict:${conflict.appointmentId}:${conflict.patientId}`,
+        });
+
+        // Both sides' calendars lose the event, the same as any other cancellation - the doctor
+        // does not need an email about their own leave, but their calendar should not go on
+        // showing a visit that is not happening.
+        await queueNotification(tx, {
+          appointmentId: conflict.appointmentId,
+          recipientId: conflict.patientId,
+          channel: 'calendar',
+          type: 'cancellation',
+          payload: { appointmentId: conflict.appointmentId },
+          dedupeKey: `calendar:cancellation:${conflict.appointmentId}:${conflict.patientId}`,
+        });
+        await queueNotification(tx, {
+          appointmentId: conflict.appointmentId,
+          recipientId: doctorId,
+          channel: 'calendar',
+          type: 'cancellation',
+          payload: { appointmentId: conflict.appointmentId },
+          dedupeKey: `calendar:cancellation:${conflict.appointmentId}:${doctorId}`,
+        });
+      }
+
+      return { leave, cancelledAppointments: conflicts.length };
+    });
   } catch (error) {
     if (isPostgresError(error, PG_ERROR.UNIQUE_VIOLATION)) {
       throw new ConflictError(

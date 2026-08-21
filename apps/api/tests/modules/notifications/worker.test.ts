@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from '../../../src/db/client.js';
-import { appointments, notificationOutbox } from '../../../src/db/schema.js';
+import { appointments, medicationReminders, notificationOutbox } from '../../../src/db/schema.js';
 import { saveGoogleEventId } from '../../../src/modules/calendar/repository.js';
 import type { CalendarEventDetails, CalendarSync } from '../../../src/modules/calendar/sync.js';
 import type { EmailMessage, EmailSender } from '../../../src/shared/email.js';
@@ -331,5 +331,57 @@ describe('drainOutboxOnce - calendar channel', () => {
     const [row] = await database.db.select().from(notificationOutbox);
     expect(row?.status).toBe('failed');
     expect(row?.lastError).toMatch(/revoked or has expired/);
+  });
+});
+
+describe('drainOutboxOnce - medication_reminder', () => {
+  it("sends the specific drug and dose this reminder is about, not just something about the appointment", async () => {
+    const { appointmentId, patientId } = await bookedAppointment();
+    const [reminder] = await database.db
+      .insert(medicationReminders)
+      .values({
+        appointmentId,
+        patientId,
+        drugName: 'Cetirizine',
+        dosage: '10mg',
+        instructions: 'Take once in the morning',
+        scheduledAt: new Date(),
+      })
+      .returning({ id: medicationReminders.id });
+    await queueNotification(database.db, {
+      appointmentId,
+      recipientId: patientId,
+      channel: 'email',
+      type: 'medication_reminder',
+      payload: { medicationReminderId: reminder!.id },
+    });
+    const { sender, sent } = fakeSender();
+
+    const result = await drainOutboxOnce(database, sender, unusedCalendarSync(), silentLogger());
+
+    expect(result.processed).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.subject).toContain('Cetirizine');
+    expect(sent[0]?.text).toContain('10mg');
+    expect(sent[0]?.text).toContain('Take once in the morning');
+    const [row] = await database.db.select().from(notificationOutbox);
+    expect(row?.status).toBe('sent');
+  });
+
+  it('fails cleanly, without crashing the tick, when the row it points at no longer exists', async () => {
+    const { appointmentId, patientId } = await bookedAppointment();
+    await queueNotification(database.db, {
+      appointmentId,
+      recipientId: patientId,
+      channel: 'email',
+      type: 'medication_reminder',
+      payload: { medicationReminderId: '00000000-0000-4000-8000-000000000000' },
+    });
+
+    await drainOutboxOnce(database, fakeSender().sender, unusedCalendarSync(), silentLogger());
+
+    const [row] = await database.db.select().from(notificationOutbox);
+    expect(row?.status).toBe('failed');
+    expect(row?.lastError).toMatch(/no longer exists/);
   });
 });

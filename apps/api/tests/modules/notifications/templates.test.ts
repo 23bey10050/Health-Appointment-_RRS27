@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderNotification } from '../../../src/modules/notifications/templates.js';
+import { renderMedicationReminder, renderNotification } from '../../../src/modules/notifications/templates.js';
 import type { RenderContext } from '../../../src/modules/notifications/render-context.js';
 
 const baseContext: RenderContext = {
@@ -16,6 +16,8 @@ const baseContext: RenderContext = {
   patientTimezone: 'Europe/London',
   slot: { start: new Date('2026-09-01T09:00:00.000Z'), end: new Date('2026-09-01T09:20:00.000Z') },
   cancellationReason: null,
+  googleEventIdPatient: null,
+  googleEventIdDoctor: null,
 };
 
 describe('renderNotification: booking_confirmation', () => {
@@ -88,13 +90,65 @@ describe('renderNotification: reminders', () => {
   });
 });
 
+describe('renderNotification: leave_conflict', () => {
+  it("reads as the doctor's own unavailability, not as the patient's own choice to cancel", () => {
+    const email = renderNotification('leave_conflict', 'patient', baseContext);
+
+    expect(email.text).toMatch(/unavailable/i);
+    expect(email.text).not.toMatch(/you cancelled|you have cancelled/i);
+  });
+
+  it("never repeats the leave's own internal reason back to the patient", () => {
+    const email = renderNotification(
+      'leave_conflict',
+      'patient',
+      { ...baseContext, cancellationReason: 'Doctor requested emergency sick leave' },
+    );
+
+    expect(email.text).not.toContain('emergency sick leave');
+  });
+});
+
+describe('renderMedicationReminder', () => {
+  it('names the drug and dose in the subject and body', () => {
+    const email = renderMedicationReminder(baseContext, {
+      drugName: 'Cetirizine',
+      dosage: '10mg',
+      instructions: null,
+    });
+
+    expect(email.subject).toContain('Cetirizine');
+    expect(email.text).toContain('Cetirizine');
+    expect(email.text).toContain('10mg');
+  });
+
+  it('includes the instructions when there are some, and omits them cleanly when there are none', () => {
+    const withInstructions = renderMedicationReminder(baseContext, {
+      drugName: 'Ibuprofen',
+      dosage: '400mg',
+      instructions: 'Take after food',
+    });
+    const withoutInstructions = renderMedicationReminder(baseContext, {
+      drugName: 'Ibuprofen',
+      dosage: '400mg',
+      instructions: null,
+    });
+
+    expect(withInstructions.text).toContain('Take after food');
+    expect(withoutInstructions.text).not.toContain('null');
+  });
+});
+
 describe('renderNotification: not-yet-implemented types', () => {
   it('fails loudly for a type that has no template yet, rather than sending something wrong', () => {
-    expect(() => renderNotification('leave_conflict', 'patient', baseContext)).toThrow(
-      /No email template/,
-    );
     expect(() => renderNotification('postvisit_summary', 'patient', baseContext)).toThrow(
       /No email template/,
+    );
+  });
+
+  it('medication_reminder points a reader at the function that actually renders it, not a generic message', () => {
+    expect(() => renderNotification('medication_reminder', 'patient', baseContext)).toThrow(
+      /renderMedicationReminder/,
     );
   });
 });

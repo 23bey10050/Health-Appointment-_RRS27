@@ -137,6 +137,17 @@ export const leaveSchema = z.object({
   reason: z.string().nullable(),
 });
 
+/** What creating a leave day answers with, on top of the plain leave record - how many already
+ *  confirmed appointments the cascade cancelled, so the admin UI can say "4 patients were
+ *  notified" without a second request. Only meaningful at the moment of creation, which is why it
+ *  is not just added to `leaveSchema` itself - a listed leave day is not re-run every time it is
+ *  read back. */
+export const createLeaveResponseSchema = leaveSchema.extend({
+  cancelledAppointments: z.number().int().min(0),
+});
+
+export type CreateLeaveResponse = z.infer<typeof createLeaveResponseSchema>;
+
 export type Leave = z.infer<typeof leaveSchema>;
 
 /**

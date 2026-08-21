@@ -1,13 +1,16 @@
-import type { AvailabilityResponse, Doctor, ListDoctorsResponse } from '@health/contracts';
+import type { AvailabilityResponse, CreateLeaveResponse, Doctor, ListDoctorsResponse } from '@health/contracts';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Database } from '../src/db/client.js';
+import { appointments, notificationOutbox } from '../src/db/schema.js';
+import { signAccessToken } from '../src/modules/auth/tokens.js';
 
 import { createTestDatabase, resetDatabase } from './helpers/database.js';
-import { addWorkingHours, createDoctor } from './helpers/fixtures.js';
+import { addWorkingHours, createConfirmedAppointment, createDoctor, createPatient, slotAt } from './helpers/fixtures.js';
 import { createUserWithToken } from './helpers/roles.js';
-import { buildTestServer } from './helpers/test-server.js';
+import { buildTestConfig, buildTestServer } from './helpers/test-server.js';
 
 let database: Database;
 let app: FastifyInstance;
@@ -338,6 +341,124 @@ describe('leaves', () => {
     });
 
     expect(response.statusCode).toBe(409);
+  });
+
+  it('reports zero cancelled appointments for a leave day with nothing booked on it', async () => {
+    const doctorId = await createDoctor(database);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+      payload: { leaveDate: '2026-12-25' },
+    });
+
+    expect(response.json<CreateLeaveResponse>().cancelledAppointments).toBe(0);
+  });
+
+  it('cancels every confirmed appointment that day, atomically, and reports the count', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC' });
+    const firstPatient = await createPatient(database);
+    const secondPatient = await createPatient(database);
+    const firstAppointment = await createConfirmedAppointment(database, {
+      doctorId,
+      patientId: firstPatient,
+      slot: slotAt(9),
+    });
+    const secondAppointment = await createConfirmedAppointment(database, {
+      doctorId,
+      patientId: secondPatient,
+      slot: slotAt(14),
+    });
+    // A confirmed appointment the same doctor has on a different day must be left alone.
+    const untouchedAppointment = await createConfirmedAppointment(database, {
+      doctorId,
+      patientId: firstPatient,
+      slot: { start: new Date('2026-09-02T09:00:00.000Z'), end: new Date('2026-09-02T09:20:00.000Z') },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+      payload: { leaveDate: '2026-09-01' },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json<CreateLeaveResponse>().cancelledAppointments).toBe(2);
+
+    const rows = await database.db
+      .select({ id: appointments.id, status: appointments.status })
+      .from(appointments);
+    const byId = new Map(rows.map((row) => [row.id, row.status]));
+    expect(byId.get(firstAppointment)).toBe('cancelled');
+    expect(byId.get(secondAppointment)).toBe('cancelled');
+    expect(byId.get(untouchedAppointment)).toBe('confirmed');
+  });
+
+  it('queues a leave_conflict email and a calendar-delete for both sides, per cancelled appointment', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC' });
+    const patientId = await createPatient(database);
+    const appointmentId = await createConfirmedAppointment(database, {
+      doctorId,
+      patientId,
+      slot: slotAt(9),
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+      payload: { leaveDate: '2026-09-01' },
+    });
+
+    const rows = await database.db
+      .select({ channel: notificationOutbox.channel, type: notificationOutbox.type, recipientId: notificationOutbox.recipientId })
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.appointmentId, appointmentId));
+
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((row) => row.channel === 'email' && row.type === 'leave_conflict')).toEqual([
+      { channel: 'email', type: 'leave_conflict', recipientId: patientId },
+    ]);
+    const calendarDeletes = rows.filter((row) => row.channel === 'calendar');
+    expect(calendarDeletes).toHaveLength(2);
+    expect(calendarDeletes.every((row) => row.type === 'cancellation')).toBe(true);
+    expect(calendarDeletes.map((row) => row.recipientId).sort()).toEqual([doctorId, patientId].sort());
+  });
+
+  it('a failure anywhere in the transaction leaves zero partial state behind', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC' });
+    const patientId = await createPatient(database);
+    await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(9) });
+    // A token, correctly signed, for a user id that was never actually created. createdByAdminId
+    // ends up as both doctor_leaves.created_by and appointments.cancelled_by - two real foreign
+    // keys - so this fails the transaction on a genuine constraint violation, not a mock standing
+    // in for one.
+    const testConfig = buildTestConfig();
+    const impostorAdminToken = signAccessToken(
+      { sub: '00000000-0000-4000-8000-999999999999', role: 'admin' },
+      { secret: testConfig.auth.jwtAccessSecret, ttlSeconds: testConfig.auth.accessTokenTtlSeconds },
+    ).token;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(impostorAdminToken),
+      payload: { leaveDate: '2026-09-01' },
+    });
+
+    expect(response.statusCode).toBe(500);
+    const leaves = await app.inject({
+      method: 'GET',
+      url: `/admin/doctors/${doctorId}/leaves`,
+      headers: authed(adminToken),
+    });
+    expect(leaves.json<unknown[]>()).toHaveLength(0);
+    const [appointment] = await database.db.select({ status: appointments.status }).from(appointments);
+    expect(appointment?.status).toBe('confirmed');
+    const outboxRows = await database.db.select().from(notificationOutbox);
+    expect(outboxRows).toHaveLength(0);
   });
 });
 

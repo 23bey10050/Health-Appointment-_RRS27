@@ -1,8 +1,8 @@
 import type { CreateDoctorRequest, UpdateDoctorRequest, WorkingHourInput } from '@health/contracts';
-import { and, asc, count, eq, ilike } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, sql } from 'drizzle-orm';
 
 import type { Database, Db, DbTransaction } from '../../db/client.js';
-import { doctorLeaves, doctorProfiles, doctorWorkingHours, users } from '../../db/schema.js';
+import { appointments, doctorLeaves, doctorProfiles, doctorWorkingHours, users } from '../../db/schema.js';
 import { hashPassword } from '../../shared/password.js';
 
 /** Anything that can run a `select`/`insert`/`update`/`delete` — a plain connection or mid-transaction. */
@@ -321,13 +321,15 @@ export async function listLeaves(database: Database, doctorId: string): Promise<
     .orderBy(asc(doctorLeaves.leaveDate));
 }
 
+/** Runs inside the transaction the cascade also uses, rather than opening its own - saving the
+ *  leave day and cancelling whatever it conflicts with either both happen or neither does. */
 export async function addLeave(
-  database: Database,
+  tx: DbTransaction,
   doctorId: string,
   input: { leaveDate: string; reason?: string },
   createdByAdminId: string,
 ): Promise<LeaveRow> {
-  const [row] = await database.db
+  const [row] = await tx
     .insert(doctorLeaves)
     .values({
       doctorId,
@@ -345,6 +347,69 @@ export async function addLeave(
     throw new Error('Insert returned no row for a new leave day.');
   }
   return row;
+}
+
+export interface LeaveConflict {
+  appointmentId: string;
+  patientId: string;
+}
+
+interface LeaveConflictRow extends Record<string, unknown> {
+  appointment_id: string;
+  patient_id: string;
+}
+
+/**
+ * Finds every confirmed appointment that falls on a doctor's newly marked leave day, and locks
+ * each one for the rest of the transaction so nothing else can book, cancel, or reschedule any of
+ * them while the cascade below is still deciding what to do with them.
+ *
+ * "That day" means the doctor's own local calendar day, not a literal UTC midnight-to-midnight
+ * window - the same `AT TIME ZONE` conversion the availability engine already relies on for
+ * exactly the same reason, so a leave day marked in the doctor's own timezone actually covers the
+ * hours patients could have booked into.
+ */
+export async function findAndLockConfirmedAppointmentsOnDate(
+  tx: DbTransaction,
+  doctorId: string,
+  leaveDate: string,
+): Promise<LeaveConflict[]> {
+  const result = await tx.execute<LeaveConflictRow>(sql`
+    WITH doctor AS (
+      SELECT timezone FROM users WHERE id = ${doctorId}
+    ),
+    day_range AS (
+      SELECT
+        (${leaveDate}::date AT TIME ZONE doc.timezone) AS range_start,
+        ((${leaveDate}::date + 1) AT TIME ZONE doc.timezone) AS range_end
+      FROM doctor doc
+    )
+    SELECT a.id AS appointment_id, a.patient_id
+    FROM appointments a, day_range r
+    WHERE a.doctor_id = ${doctorId}
+      AND a.status = 'confirmed'
+      AND a.slot && tstzrange(r.range_start, r.range_end)
+    FOR UPDATE OF a
+  `);
+
+  return result.rows.map((row) => ({ appointmentId: row.appointment_id, patientId: row.patient_id }));
+}
+
+export async function cancelAppointmentForLeave(
+  tx: DbTransaction,
+  appointmentId: string,
+  cancelledBy: string,
+  reason: string,
+): Promise<void> {
+  await tx
+    .update(appointments)
+    .set({
+      status: 'cancelled',
+      cancelledAt: new Date(),
+      cancelledBy,
+      cancellationReason: reason,
+    })
+    .where(eq(appointments.id, appointmentId));
 }
 
 export async function deleteLeave(

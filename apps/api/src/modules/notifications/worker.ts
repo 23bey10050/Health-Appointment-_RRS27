@@ -2,13 +2,14 @@ import type { Database } from '../../db/client.js';
 import { buildCalendarEventCopy } from '../calendar/copy.js';
 import { saveGoogleEventId } from '../calendar/repository.js';
 import type { CalendarSync } from '../calendar/sync.js';
+import { findMedicationReminderById } from '../medications/repository.js';
 import type { EmailSender } from '../../shared/email.js';
 import { describeUnknownError } from '../../shared/errors.js';
 import type { Logger } from '../../shared/logging.js';
 
 import { claimDueNotifications, markFailed, markSent, type OutboxRow } from './outbox-store.js';
 import { loadRenderContext, type RenderContext } from './render-context.js';
-import { renderNotification, type NotificationSide } from './templates.js';
+import { renderMedicationReminder, renderNotification, type NotificationSide } from './templates.js';
 
 /** Which side of the appointment a row's recipient is on — the one thing that decides which of
  *  the two templates for a shared type like `booking_confirmation` gets used. */
@@ -36,6 +37,44 @@ async function sendEmail(
 
   await sender.send({
     to: recipient,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+    idempotencyKey: row.id,
+  });
+}
+
+/** A medication reminder's `payload` names which specific row in `medication_reminders` this one
+ *  is about - a `RenderContext` alone has no idea which drug or dose, since that lives per-drug,
+ *  not per-appointment. */
+function medicationReminderIdFrom(row: OutboxRow): string {
+  const payload = row.payload as { medicationReminderId?: unknown };
+  if (typeof payload.medicationReminderId !== 'string') {
+    throw new Error(`Outbox row ${row.id} is a medication_reminder with no medicationReminderId in its payload.`);
+  }
+  return payload.medicationReminderId;
+}
+
+async function sendMedicationReminder(
+  database: Database,
+  sender: EmailSender,
+  row: OutboxRow,
+  context: RenderContext,
+): Promise<void> {
+  const reminderId = medicationReminderIdFrom(row);
+  const reminder = await findMedicationReminderById(database, reminderId);
+  if (!reminder) {
+    throw new Error(`Medication reminder ${reminderId} no longer exists.`);
+  }
+
+  const email = renderMedicationReminder(context, {
+    drugName: reminder.drugName,
+    dosage: reminder.dosage,
+    instructions: reminder.instructions,
+  });
+
+  await sender.send({
+    to: { email: context.patientEmail, name: context.patientName },
     subject: email.subject,
     html: email.html,
     text: email.text,
@@ -101,10 +140,12 @@ async function processOne(
       );
     }
 
-    if (row.channel === 'email') {
-      await sendEmail(sender, row, side, context);
-    } else {
+    if (row.channel === 'calendar') {
       await syncCalendar(database, calendarSync, row, side, context);
+    } else if (row.type === 'medication_reminder') {
+      await sendMedicationReminder(database, sender, row, context);
+    } else {
+      await sendEmail(sender, row, side, context);
     }
 
     await markSent(database, row.id);

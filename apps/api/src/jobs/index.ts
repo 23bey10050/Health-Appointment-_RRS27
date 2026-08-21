@@ -1,6 +1,7 @@
 import type { AppConfig } from '../config/env.js';
 import type { Database } from '../db/client.js';
 import { buildCalendarSync } from '../modules/calendar/sync.js';
+import { queueDueMedicationReminders } from '../modules/medications/dispatcher.js';
 import { drainOutboxOnce } from '../modules/notifications/worker.js';
 import { queueDueReminders } from '../modules/notifications/reminders.js';
 import { BrevoEmailSender } from '../providers/brevo.js';
@@ -10,6 +11,7 @@ import { startScheduler, type RunningScheduler } from '../shared/scheduler.js';
 
 const OUTBOX_DRAIN_INTERVAL_MS = 20_000;
 const REMINDER_SCHEDULER_INTERVAL_MS = 5 * 60_000;
+const MEDICATION_DISPATCH_INTERVAL_MS = 5 * 60_000;
 
 /** Picks the real sender when there is an account to send through, and the one that prints to the
  *  console otherwise — the switch this whole abstraction exists for. */
@@ -51,6 +53,13 @@ export function startBackgroundJobs(
         intervalMs: REMINDER_SCHEDULER_INTERVAL_MS,
         run: async () => {
           await queueDueReminders(database);
+        },
+      },
+      {
+        name: 'medication-reminder-dispatcher',
+        intervalMs: MEDICATION_DISPATCH_INTERVAL_MS,
+        run: async () => {
+          await queueDueMedicationReminders(database);
         },
       },
     ],
