@@ -39,3 +39,13 @@ export type DeadLetterNotification = z.infer<typeof deadLetterNotificationSchema
 export const listDeadLettersResponseSchema = z.array(deadLetterNotificationSchema);
 
 export const retryNotificationResponseSchema = z.object({ retried: z.literal(true) });
+
+/** A count per outbox status, for the same "Notification Health" tab - the at-a-glance number
+ *  next to the row-by-row dead-letter list below it. */
+export const notificationSummaryResponseSchema = z.object({
+  queued: z.number().int().min(0),
+  sent: z.number().int().min(0),
+  failed: z.number().int().min(0),
+  dead_letter: z.number().int().min(0),
+});
+export type NotificationSummaryResponse = z.infer<typeof notificationSummaryResponseSchema>;

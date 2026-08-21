@@ -61,6 +61,47 @@ async function createDeadLetter(): Promise<string> {
   return row.id;
 }
 
+describe('GET /admin/notifications/summary', () => {
+  it('counts every status, zero for anything with nothing in it', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/notifications/summary',
+      headers: authed(adminToken),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ queued: 0, sent: 0, failed: 0, dead_letter: 0 });
+  });
+
+  it('reflects real rows in real statuses, not just queued ones', async () => {
+    const patient = await createUserWithToken(database, 'patient');
+    await queueNotification(database.db, {
+      recipientId: patient.id,
+      channel: 'email',
+      type: 'booking_confirmation',
+      payload: {},
+    });
+    await createDeadLetter();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/notifications/summary',
+      headers: authed(adminToken),
+    });
+
+    expect(response.json()).toEqual({ queued: 1, sent: 0, failed: 0, dead_letter: 1 });
+  });
+
+  it('blocks a patient with 403', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/notifications/summary',
+      headers: authed(patientToken),
+    });
+    expect(response.statusCode).toBe(403);
+  });
+});
+
 describe('GET /admin/notifications/dead-letter', () => {
   it('lists dead-lettered notifications for an admin', async () => {
     const id = await createDeadLetter();

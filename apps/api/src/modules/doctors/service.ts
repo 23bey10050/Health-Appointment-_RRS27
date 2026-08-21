@@ -89,6 +89,21 @@ export async function listDoctors(
   return { items, total, page: query.page, pageSize: query.pageSize };
 }
 
+/** The admin roster - every doctor, active or not, since deactivating one through this same
+ *  admin screen must not make them impossible to find again. */
+export async function listAllDoctorsForAdmin(
+  database: Database,
+  query: ListDoctorsQuery,
+): Promise<{ items: DoctorRow[]; total: number; page: number; pageSize: number }> {
+  const { items, total } = await repository.listDoctors(database, {
+    specialization: query.specialization,
+    page: query.page,
+    pageSize: query.pageSize,
+    includeInactive: true,
+  });
+  return { items, total, page: query.page, pageSize: query.pageSize };
+}
+
 export async function addWorkingHour(
   database: Database,
   doctorId: string,

@@ -43,6 +43,19 @@ export function Layout() {
                   </NavLink>
                 </>
               )}
+              {session.user.role === 'admin' && (
+                <>
+                  <NavLink to="/admin/doctors" className={NAV_LINK_CLASS}>
+                    Doctors
+                  </NavLink>
+                  <NavLink to="/admin/notifications" className={NAV_LINK_CLASS}>
+                    Notifications
+                  </NavLink>
+                  <NavLink to="/admin/audit-log" className={NAV_LINK_CLASS}>
+                    Audit log
+                  </NavLink>
+                </>
+              )}
               <span className="mx-2 text-sm text-slate-500">{session.user.fullName}</span>
               <Button variant="secondary" onClick={() => void logoutCurrentUser()}>
                 Log out

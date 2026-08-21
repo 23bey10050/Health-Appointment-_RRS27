@@ -104,6 +104,35 @@ describe('admin doctor management, role boundary', () => {
   });
 });
 
+describe('GET /admin/doctors', () => {
+  it('includes a deactivated doctor - the patient-facing search never would', async () => {
+    await createDoctor(database, { specialization: 'Radiology', isActive: false });
+    await createDoctor(database, { specialization: 'Radiology' });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/doctors?specialization=Radiology',
+      headers: authed(adminToken),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<ListDoctorsResponse>();
+    expect(body.total).toBe(2);
+    expect(body.items.some((item) => !item.isActive)).toBe(true);
+  });
+
+  it('blocks a patient and a doctor with 403 - the roster is admin-only', async () => {
+    for (const token of [patientToken, doctorToken]) {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/admin/doctors',
+        headers: authed(token),
+      });
+      expect(response.statusCode).toBe(403);
+    }
+  });
+});
+
 describe('POST /admin/doctors validation', () => {
   it('rejects a password below the shared minimum', async () => {
     const response = await app.inject({
@@ -333,6 +362,27 @@ describe('leaves', () => {
       headers: authed(adminToken),
     });
     expect(listAfter.json<unknown[]>()).toHaveLength(0);
+  });
+
+  it('previews how many confirmed appointments a date would affect, before marking it', async () => {
+    const doctorId = await createDoctor(database, { timezone: 'UTC' });
+    const patientId = await createPatient(database);
+    await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(9) });
+    await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(14) });
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: `/admin/doctors/${doctorId}/leaves/preview?leaveDate=2026-09-01`,
+      headers: authed(adminToken),
+    });
+
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toEqual({ affectedAppointments: 2 });
+
+    const stillBooked = await database.db
+      .select({ status: appointments.status })
+      .from(appointments);
+    expect(stillBooked.every((row) => row.status === 'confirmed')).toBe(true);
   });
 
   it('409s a duplicate leave date for the same doctor', async () => {

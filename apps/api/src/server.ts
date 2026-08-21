@@ -9,6 +9,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import type { AppConfig } from './config/env.js';
 import type { Database } from './db/client.js';
 import { appointmentRoutes } from './modules/appointments/routes.js';
+import { adminAuditRoutes } from './modules/audit/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { calendarAuthRoutes } from './modules/calendar/routes.js';
 import {
@@ -108,6 +109,7 @@ export async function buildServer({
   await app.register(selfDoctorRoutes, { prefix: '/doctors/me' });
   await app.register(appointmentRoutes, { prefix: '/appointments' });
   await app.register(adminNotificationRoutes, { prefix: '/admin/notifications' });
+  await app.register(adminAuditRoutes, { prefix: '/admin/audit-log' });
 
   return app;
 }

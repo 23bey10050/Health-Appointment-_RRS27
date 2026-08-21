@@ -27,9 +27,11 @@ export function RequireRole({ roles }: { roles: readonly UserRole[] }) {
   return <Outlet />;
 }
 
-/** The one place that decides where a freshly signed-in user actually lands - patients and
- *  doctors each get the portal built for them, and an admin gets an honest "not built yet" rather
- *  than a page that quietly 403s the first thing it tries to load. */
+/** The one place that decides where a freshly signed-in user actually lands - each of the three
+ *  roles has its own portal now. The final fallback is only reachable if `session` is somehow
+ *  null on the one render this runs (it sits inside `RequireAuth`, so that should never actually
+ *  happen) - sending it back to login is the honest thing to do with a state that should not
+ *  exist, rather than pretending a role with no portal is still a possibility. */
 export function RoleHome() {
   const { session } = useAuth();
 
@@ -39,5 +41,8 @@ export function RoleHome() {
   if (session?.user.role === 'doctor') {
     return <Navigate to="/doctor/schedule" replace />;
   }
-  return <Navigate to="/portal-coming-soon" replace />;
+  if (session?.user.role === 'admin') {
+    return <Navigate to="/admin" replace />;
+  }
+  return <Navigate to="/login" replace />;
 }

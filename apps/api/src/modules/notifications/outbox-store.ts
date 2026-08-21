@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lte } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, lte } from 'drizzle-orm';
 
 import type { Database } from '../../db/client.js';
 import { notificationOutbox } from '../../db/schema.js';
@@ -93,6 +93,23 @@ export async function markFailed(
       nextAttemptAt: new Date(Date.now() + backoffSeconds * 1000),
     })
     .where(eq(notificationOutbox.id, row.id));
+}
+
+/** The at-a-glance counts behind the "Notification Health" tab's summary strip - one number per
+ *  status, always all four keys present even when a status currently has nothing in it. */
+export async function countByStatus(
+  database: Database,
+): Promise<{ queued: number; sent: number; failed: number; dead_letter: number }> {
+  const rows = await database.db
+    .select({ status: notificationOutbox.status, total: count() })
+    .from(notificationOutbox)
+    .groupBy(notificationOutbox.status);
+
+  const counts = { queued: 0, sent: 0, failed: 0, dead_letter: 0 };
+  for (const row of rows) {
+    counts[row.status] = row.total;
+  }
+  return counts;
 }
 
 export async function listDeadLetters(database: Database): Promise<OutboxRow[]> {

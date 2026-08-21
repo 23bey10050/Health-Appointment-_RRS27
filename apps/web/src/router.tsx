@@ -20,7 +20,6 @@ export const router = createBrowserRouter([
         element: <RequireAuth />,
         children: [
           { index: true, element: <RoleHome /> },
-          { path: 'portal-coming-soon', lazy: () => import('./routes/PortalComingSoonPage.js') },
           {
             element: <RequireRole roles={['patient']} />,
             children: [
@@ -46,6 +45,25 @@ export const router = createBrowserRouter([
                 lazy: () => import('./routes/doctor/AppointmentVisitPage.js'),
               },
               { path: 'doctor/leaves', lazy: () => import('./routes/doctor/LeavesPage.js') },
+            ],
+          },
+          {
+            element: <RequireRole roles={['admin']} />,
+            children: [
+              { path: 'admin', lazy: () => import('./routes/admin/AdminDashboardPage.js') },
+              { path: 'admin/doctors', lazy: () => import('./routes/admin/AdminDoctorsPage.js') },
+              {
+                path: 'admin/doctors/:id',
+                lazy: () => import('./routes/admin/AdminDoctorDetailPage.js'),
+              },
+              {
+                path: 'admin/notifications',
+                lazy: () => import('./routes/admin/AdminNotificationsPage.js'),
+              },
+              {
+                path: 'admin/audit-log',
+                lazy: () => import('./routes/admin/AdminAuditLogPage.js'),
+              },
             ],
           },
         ],

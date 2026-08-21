@@ -84,8 +84,12 @@ RUN IT LOCALLY (about two minutes, no online accounts needed)
      the pre-visit AI brief and, once notes are submitted, the completed
      visit's notes and prescription; "Days off" lets a doctor mark a leave
      day with a preview of how many booked patients it would affect before
-     confirming. An admin account still lands on an honest "not built yet"
-     screen, since the admin portal is a later phase.
+     confirming. The seeded admin (admin@clinic.test, same password) lands
+     on a dashboard with three sections: Doctors (create an account, edit a
+     profile, manage shifts, mark days off for any doctor, deactivate and
+     reactivate), Notification health (queued/sent/failed/dead-letter counts
+     with one-click retry), and the Audit log (every recorded action,
+     filterable by action or entity type).
 
 -------------------------------------------------------------------------------
 IF PORT 5432 IS ALREADY TAKEN
@@ -301,6 +305,40 @@ same way a patient's own /appointments/mine never takes a patient id either.
 
     curl -X DELETE http://localhost:4000/doctors/me/leaves/<leaveId> \
       -H "Authorization: Bearer <doctorAccessToken>"
+
+-------------------------------------------------------------------------------
+ADMIN PORTAL
+-------------------------------------------------------------------------------
+
+Everything here needs an admin's access token.
+
+  The full doctor roster - active and deactivated alike, unlike the
+  patient-facing GET /doctors above, which always hides a deactivated one:
+
+    curl http://localhost:4000/admin/doctors \
+      -H "Authorization: Bearer <adminAccessToken>"
+
+  Preview a leave day's impact on any doctor's calendar before marking it -
+  the same read-only count a doctor gets over their own days off in
+  DOCTOR PORTAL above, here for an admin managing someone else's:
+
+    curl "http://localhost:4000/admin/doctors/<doctorId>/leaves/preview?leaveDate=2026-12-25" \
+      -H "Authorization: Bearer <adminAccessToken>"
+
+  Notification Health - a count per status, then the same dead-letter list
+  and retry from EMAIL NOTIFICATIONS below:
+
+    curl http://localhost:4000/admin/notifications/summary \
+      -H "Authorization: Bearer <adminAccessToken>"
+
+  The audit log - every action `shared/audit.ts` has recorded since Phase 2,
+  newest first, with the actor's name joined in:
+
+    curl http://localhost:4000/admin/audit-log \
+      -H "Authorization: Bearer <adminAccessToken>"
+
+    curl "http://localhost:4000/admin/audit-log?action=appointment_cancelled&page=1&pageSize=25" \
+      -H "Authorization: Bearer <adminAccessToken>"
 
 -------------------------------------------------------------------------------
 EMAIL NOTIFICATIONS

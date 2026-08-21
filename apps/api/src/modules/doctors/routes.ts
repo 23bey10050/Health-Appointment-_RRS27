@@ -78,6 +78,22 @@ function toSlot(slot: AvailabilitySlot): { start: string; end: string } {
 export const adminDoctorRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
   app.addHook('preHandler', requireRole('admin'));
 
+  app.get(
+    '/',
+    {
+      schema: { querystring: listDoctorsQuerySchema, response: { 200: listDoctorsResponseSchema } },
+    },
+    async (request, reply): Promise<ListDoctorsResponse> => {
+      const result = await doctorService.listAllDoctorsForAdmin(request.server.db, request.query);
+      return reply.status(200).send({
+        items: result.items.map(toDoctorSummary),
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+      });
+    },
+  );
+
   app.post(
     '/',
     { schema: { body: createDoctorRequestSchema, response: { 201: doctorSchema } } },
@@ -152,6 +168,25 @@ export const adminDoctorRoutes: FastifyPluginCallbackZod = (app, _options, done)
     async (request, reply) => {
       const leaves = await doctorService.listLeaves(request.server.db, request.params.id);
       return reply.status(200).send(leaves.map(toLeave));
+    },
+  );
+
+  app.get(
+    '/:id/leaves/preview',
+    {
+      schema: {
+        params: idParamSchema,
+        querystring: leavePreviewQuerySchema,
+        response: { 200: leavePreviewResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const preview = await doctorService.previewLeaveImpact(
+        request.server.db,
+        request.params.id,
+        request.query.leaveDate,
+      );
+      return reply.status(200).send(preview);
     },
   );
 

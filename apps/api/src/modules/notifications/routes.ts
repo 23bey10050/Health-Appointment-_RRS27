@@ -1,5 +1,6 @@
 import {
   listDeadLettersResponseSchema,
+  notificationSummaryResponseSchema,
   retryNotificationResponseSchema,
   type DeadLetterNotification,
 } from '@health/contracts';
@@ -9,7 +10,7 @@ import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import { requireRole } from '../auth/guards.js';
 import { NotFoundError } from '../../shared/errors.js';
 
-import { listDeadLetters, retryDeadLetter, type OutboxRow } from './outbox-store.js';
+import { countByStatus, listDeadLetters, retryDeadLetter, type OutboxRow } from './outbox-store.js';
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 
@@ -33,6 +34,15 @@ function toDeadLetter(row: OutboxRow): DeadLetterNotification {
  */
 export const adminNotificationRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
   app.addHook('preHandler', requireRole('admin'));
+
+  app.get(
+    '/summary',
+    { schema: { response: { 200: notificationSummaryResponseSchema } } },
+    async (request, reply) => {
+      const summary = await countByStatus(request.server.db);
+      return reply.status(200).send(summary);
+    },
+  );
 
   app.get(
     '/dead-letter',

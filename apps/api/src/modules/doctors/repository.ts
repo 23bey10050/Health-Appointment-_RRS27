@@ -198,6 +198,10 @@ export interface ListDoctorsFilter {
   specialization?: string;
   page: number;
   pageSize: number;
+  /** The patient-facing search this filter normally powers has no business surfacing a doctor
+   *  nobody can book - only the admin management screen, which needs to find a deactivated doctor
+   *  again to reactivate them, sets this. */
+  includeInactive?: boolean;
 }
 
 export interface ListDoctorsResult {
@@ -206,15 +210,15 @@ export interface ListDoctorsResult {
 }
 
 /**
- * Only ever returns doctors a patient can actually book. A deactivated doctor still exists — an
- * admin can look them up directly by id to reactivate them — but they have no business showing up
- * in a search result nobody can act on.
+ * Patient-facing by default: only ever returns doctors a patient can actually book. Set
+ * `includeInactive` for the admin management view, which needs the full roster, deactivated
+ * doctors included, or a deactivation would be a one-way door with no way back through the UI.
  */
 export async function listDoctors(
   database: Database,
   filter: ListDoctorsFilter,
 ): Promise<ListDoctorsResult> {
-  const conditions = [eq(users.isActive, true)];
+  const conditions = filter.includeInactive ? [] : [eq(users.isActive, true)];
   if (filter.specialization) {
     // Exact match, case-insensitive, no wildcards - which is exactly what the index on
     // lower(specialization) from the Phase 1 migration was built to accelerate.
