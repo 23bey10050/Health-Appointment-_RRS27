@@ -153,7 +153,9 @@ export function renderMedicationReminder(
   ctx: RenderContext,
   medication: MedicationReminderDetails,
 ): RenderedEmail {
-  const dose = medication.dosage ? `${medication.drugName} (${medication.dosage})` : medication.drugName;
+  const dose = medication.dosage
+    ? `${medication.drugName} (${medication.dosage})`
+    : medication.drugName;
   const lines = [
     `Hi ${ctx.patientName},`,
     `Time to take your ${dose}.`,
@@ -193,7 +195,9 @@ export function renderNotification(
     case 'medication_reminder':
       // Rendered through `renderMedicationReminder` instead, which needs more than a
       // RenderContext carries - reaching this case means the worker's own dispatch has a bug.
-      throw new Error('medication_reminder is rendered through renderMedicationReminder, not here.');
+      throw new Error(
+        'medication_reminder is rendered through renderMedicationReminder, not here.',
+      );
     case 'reschedule':
     case 'postvisit_summary':
       // Queued by a phase later than this one, whose job is to add the matching template here

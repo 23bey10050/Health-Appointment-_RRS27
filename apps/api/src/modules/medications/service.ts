@@ -22,7 +22,12 @@ function todayIn(timezone: string): string {
  */
 export async function scheduleMedicationReminders(
   tx: DbTransaction,
-  input: { appointmentId: string; patientId: string; patientTimezone: string; prescription: readonly PrescriptionItem[] },
+  input: {
+    appointmentId: string;
+    patientId: string;
+    patientTimezone: string;
+    prescription: readonly PrescriptionItem[];
+  },
 ): Promise<void> {
   const startDate = todayIn(input.patientTimezone);
 

@@ -11,7 +11,12 @@ import { requireAuth, requireUser } from '../auth/guards.js';
 import { ServiceUnavailableError } from '../../shared/errors.js';
 import type { GoogleOAuthConfig } from '../../providers/google-oauth.js';
 
-import { buildConnectUrl, completeConnection, disconnect, getConnectionStatus } from './oauth-service.js';
+import {
+  buildConnectUrl,
+  completeConnection,
+  disconnect,
+  getConnectionStatus,
+} from './oauth-service.js';
 
 const callbackQuerySchema = z.object({
   code: z.string().optional(),
@@ -21,7 +26,12 @@ const callbackQuerySchema = z.object({
 
 function requireGoogleConfig(config: AppConfig): GoogleOAuthConfig & { encryptionKey: string } {
   const { google } = config;
-  if (!google.clientId || !google.clientSecret || !google.redirectUri || !google.tokenEncryptionKey) {
+  if (
+    !google.clientId ||
+    !google.clientSecret ||
+    !google.redirectUri ||
+    !google.tokenEncryptionKey
+  ) {
     throw new ServiceUnavailableError(
       'Google Calendar sync is not configured on this server. Set GOOGLE_CLIENT_ID, ' +
         'GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI and GOOGLE_TOKEN_ENCRYPTION_KEY to enable it.',
@@ -36,9 +46,11 @@ function requireGoogleConfig(config: AppConfig): GoogleOAuthConfig & { encryptio
 }
 
 function htmlPage(title: string, message: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head>` +
+  return (
+    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head>` +
     `<body style="font-family: sans-serif; max-width: 32rem; margin: 4rem auto; text-align: center;">` +
-    `<h1>${title}</h1><p>${message}</p></body></html>`;
+    `<h1>${title}</h1><p>${message}</p></body></html>`
+  );
 }
 
 /**
@@ -56,7 +68,11 @@ export const calendarAuthRoutes: FastifyPluginCallbackZod = (app, _options, done
     },
     async (request, reply) => {
       const google = requireGoogleConfig(request.server.config);
-      const url = buildConnectUrl(google, request.server.config.auth.jwtAccessSecret, requireUser(request).id);
+      const url = buildConnectUrl(
+        google,
+        request.server.config.auth.jwtAccessSecret,
+        requireUser(request).id,
+      );
       return reply.status(200).send({ url });
     },
   );

@@ -131,7 +131,9 @@ describe('when Google Calendar sync is configured', () => {
       url: '/auth/google/connect',
       headers: { authorization: `Bearer ${patient.token}` },
     });
-    const state = new URL(connectResponse.json<GoogleConnectUrlResponse>().url).searchParams.get('state');
+    const state = new URL(connectResponse.json<GoogleConnectUrlResponse>().url).searchParams.get(
+      'state',
+    );
 
     vi.stubGlobal(
       'fetch',
@@ -161,7 +163,9 @@ describe('when Google Calendar sync is configured', () => {
       url: '/auth/google/connect',
       headers: { authorization: `Bearer ${patient.token}` },
     });
-    const state = new URL(connectResponse.json<GoogleConnectUrlResponse>().url).searchParams.get('state');
+    const state = new URL(connectResponse.json<GoogleConnectUrlResponse>().url).searchParams.get(
+      'state',
+    );
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

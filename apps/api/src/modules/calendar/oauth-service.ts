@@ -10,7 +10,11 @@ import {
 import { signOAuthState, verifyOAuthState } from './state-token.js';
 import { deleteGoogleTokens, hasGoogleTokens, saveGoogleTokens } from './tokens.js';
 
-export function buildConnectUrl(oauthConfig: GoogleOAuthConfig, stateSecret: string, userId: string): string {
+export function buildConnectUrl(
+  oauthConfig: GoogleOAuthConfig,
+  stateSecret: string,
+  userId: string,
+): string {
   const state = signOAuthState(userId, stateSecret);
   return buildGoogleAuthUrl(oauthConfig, state);
 }
@@ -32,7 +36,9 @@ export async function completeConnection(
 ): Promise<void> {
   const userId = verifyOAuthState(state, stateSecret);
   if (!userId) {
-    throw new ForbiddenError('This connection link is invalid or has expired. Please try connecting again.');
+    throw new ForbiddenError(
+      'This connection link is invalid or has expired. Please try connecting again.',
+    );
   }
 
   const tokens = await exchangeGoogleCode(oauthConfig, code);

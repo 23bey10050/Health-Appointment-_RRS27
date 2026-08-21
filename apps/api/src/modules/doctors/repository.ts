@@ -2,7 +2,13 @@ import type { CreateDoctorRequest, UpdateDoctorRequest, WorkingHourInput } from 
 import { and, asc, count, eq, ilike, sql } from 'drizzle-orm';
 
 import type { Database, Db, DbTransaction } from '../../db/client.js';
-import { appointments, doctorLeaves, doctorProfiles, doctorWorkingHours, users } from '../../db/schema.js';
+import {
+  appointments,
+  doctorLeaves,
+  doctorProfiles,
+  doctorWorkingHours,
+  users,
+} from '../../db/schema.js';
 import { hashPassword } from '../../shared/password.js';
 
 /** Anything that can run a `select`/`insert`/`update`/`delete` — a plain connection or mid-transaction. */
@@ -392,7 +398,10 @@ export async function findAndLockConfirmedAppointmentsOnDate(
     FOR UPDATE OF a
   `);
 
-  return result.rows.map((row) => ({ appointmentId: row.appointment_id, patientId: row.patient_id }));
+  return result.rows.map((row) => ({
+    appointmentId: row.appointment_id,
+    patientId: row.patient_id,
+  }));
 }
 
 export async function cancelAppointmentForLeave(

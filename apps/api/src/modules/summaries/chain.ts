@@ -37,8 +37,7 @@ function stripCodeFence(raw: string): string {
 }
 
 type AttemptOutcome<T> =
-  | { ok: true; attempt: SummaryAttempt; value: T }
-  | { ok: false; attempt: SummaryAttempt };
+  { ok: true; attempt: SummaryAttempt; value: T } | { ok: false; attempt: SummaryAttempt };
 
 async function attemptOnce<T>(
   provider: SummaryProvider,

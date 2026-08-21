@@ -1,4 +1,9 @@
-import type { AvailabilityResponse, CreateLeaveResponse, Doctor, ListDoctorsResponse } from '@health/contracts';
+import type {
+  AvailabilityResponse,
+  CreateLeaveResponse,
+  Doctor,
+  ListDoctorsResponse,
+} from '@health/contracts';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -8,7 +13,13 @@ import { appointments, notificationOutbox } from '../src/db/schema.js';
 import { signAccessToken } from '../src/modules/auth/tokens.js';
 
 import { createTestDatabase, resetDatabase } from './helpers/database.js';
-import { addWorkingHours, createConfirmedAppointment, createDoctor, createPatient, slotAt } from './helpers/fixtures.js';
+import {
+  addWorkingHours,
+  createConfirmedAppointment,
+  createDoctor,
+  createPatient,
+  slotAt,
+} from './helpers/fixtures.js';
 import { createUserWithToken } from './helpers/roles.js';
 import { buildTestConfig, buildTestServer } from './helpers/test-server.js';
 
@@ -374,7 +385,10 @@ describe('leaves', () => {
     const untouchedAppointment = await createConfirmedAppointment(database, {
       doctorId,
       patientId: firstPatient,
-      slot: { start: new Date('2026-09-02T09:00:00.000Z'), end: new Date('2026-09-02T09:20:00.000Z') },
+      slot: {
+        start: new Date('2026-09-02T09:00:00.000Z'),
+        end: new Date('2026-09-02T09:20:00.000Z'),
+      },
     });
 
     const response = await app.inject({
@@ -413,7 +427,11 @@ describe('leaves', () => {
     });
 
     const rows = await database.db
-      .select({ channel: notificationOutbox.channel, type: notificationOutbox.type, recipientId: notificationOutbox.recipientId })
+      .select({
+        channel: notificationOutbox.channel,
+        type: notificationOutbox.type,
+        recipientId: notificationOutbox.recipientId,
+      })
       .from(notificationOutbox)
       .where(eq(notificationOutbox.appointmentId, appointmentId));
 
@@ -424,7 +442,9 @@ describe('leaves', () => {
     const calendarDeletes = rows.filter((row) => row.channel === 'calendar');
     expect(calendarDeletes).toHaveLength(2);
     expect(calendarDeletes.every((row) => row.type === 'cancellation')).toBe(true);
-    expect(calendarDeletes.map((row) => row.recipientId).sort()).toEqual([doctorId, patientId].sort());
+    expect(calendarDeletes.map((row) => row.recipientId).sort()).toEqual(
+      [doctorId, patientId].sort(),
+    );
   });
 
   it('a failure anywhere in the transaction leaves zero partial state behind', async () => {
@@ -438,7 +458,10 @@ describe('leaves', () => {
     const testConfig = buildTestConfig();
     const impostorAdminToken = signAccessToken(
       { sub: '00000000-0000-4000-8000-999999999999', role: 'admin' },
-      { secret: testConfig.auth.jwtAccessSecret, ttlSeconds: testConfig.auth.accessTokenTtlSeconds },
+      {
+        secret: testConfig.auth.jwtAccessSecret,
+        ttlSeconds: testConfig.auth.accessTokenTtlSeconds,
+      },
     ).token;
 
     const response = await app.inject({
@@ -455,7 +478,9 @@ describe('leaves', () => {
       headers: authed(adminToken),
     });
     expect(leaves.json<unknown[]>()).toHaveLength(0);
-    const [appointment] = await database.db.select({ status: appointments.status }).from(appointments);
+    const [appointment] = await database.db
+      .select({ status: appointments.status })
+      .from(appointments);
     expect(appointment?.status).toBe('confirmed');
     const outboxRows = await database.db.select().from(notificationOutbox);
     expect(outboxRows).toHaveLength(0);

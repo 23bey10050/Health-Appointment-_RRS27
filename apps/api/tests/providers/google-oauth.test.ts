@@ -72,20 +72,26 @@ describe('exchangeGoogleCode', () => {
   it('throws a clear error when Google rejects the code', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse(400, { error: 'invalid_request', error_description: 'Missing code' }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(400, { error: 'invalid_request', error_description: 'Missing code' }),
+        ),
     );
 
-    await expect(exchangeGoogleCode(config, 'bad-code')).rejects.toThrow(/invalid_request.*Missing code/s);
+    await expect(exchangeGoogleCode(config, 'bad-code')).rejects.toThrow(
+      /invalid_request.*Missing code/s,
+    );
   });
 });
 
 describe('refreshGoogleAccessToken', () => {
   it('posts the refresh_token grant and returns a new access token', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { access_token: 'a-fresh-access-token', expires_in: 3599 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { access_token: 'a-fresh-access-token', expires_in: 3599 }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const refreshed = await refreshGoogleAccessToken(config, 'the-stored-refresh-token');
@@ -103,9 +109,9 @@ describe('refreshGoogleAccessToken', () => {
       vi.fn().mockResolvedValue(jsonResponse(400, { error: 'invalid_grant' })),
     );
 
-    await expect(refreshGoogleAccessToken(config, 'a-revoked-refresh-token')).rejects.toBeInstanceOf(
-      GoogleGrantRevokedError,
-    );
+    await expect(
+      refreshGoogleAccessToken(config, 'a-revoked-refresh-token'),
+    ).rejects.toBeInstanceOf(GoogleGrantRevokedError);
   });
 
   it('throws a generic error, not GoogleGrantRevokedError, for an unrelated failure', async () => {

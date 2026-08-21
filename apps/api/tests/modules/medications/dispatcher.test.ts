@@ -5,7 +5,12 @@ import type { Database } from '../../../src/db/client.js';
 import { medicationReminders, notificationOutbox } from '../../../src/db/schema.js';
 import { queueDueMedicationReminders } from '../../../src/modules/medications/dispatcher.js';
 import { createTestDatabase, resetDatabase } from '../../helpers/database.js';
-import { createConfirmedAppointment, createDoctor, createPatient, slotAt } from '../../helpers/fixtures.js';
+import {
+  createConfirmedAppointment,
+  createDoctor,
+  createPatient,
+  slotAt,
+} from '../../helpers/fixtures.js';
 
 let database: Database;
 
@@ -24,7 +29,11 @@ beforeEach(async () => {
 async function bookedAppointment(): Promise<{ appointmentId: string; patientId: string }> {
   const doctorId = await createDoctor(database);
   const patientId = await createPatient(database);
-  const appointmentId = await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(9) });
+  const appointmentId = await createConfirmedAppointment(database, {
+    doctorId,
+    patientId,
+    slot: slotAt(9),
+  });
   return { appointmentId, patientId };
 }
 

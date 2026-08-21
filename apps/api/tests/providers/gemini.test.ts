@@ -19,9 +19,11 @@ afterEach(() => {
 
 describe('GeminiSummaryProvider', () => {
   it('sends the exact request shape Gemini documents for generateContent', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { candidates: [{ content: { parts: [{ text: '{"answer":"ok"}' }] } }] }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { candidates: [{ content: { parts: [{ text: '{"answer":"ok"}' }] } }] }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const provider = new GeminiSummaryProvider('the-api-key');
 

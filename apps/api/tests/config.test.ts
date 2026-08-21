@@ -108,7 +108,11 @@ describe('loadConfig', () => {
 
   it('accepts either AI key on its own, or both together', () => {
     const groqOnly = loadConfig({ ...MINIMUM_ENV, GROQ_API_KEY: 'a-groq-key' });
-    const both = loadConfig({ ...MINIMUM_ENV, GROQ_API_KEY: 'a-groq-key', GEMINI_API_KEY: 'a-gemini-key' });
+    const both = loadConfig({
+      ...MINIMUM_ENV,
+      GROQ_API_KEY: 'a-groq-key',
+      GEMINI_API_KEY: 'a-gemini-key',
+    });
 
     expect(groqOnly.ai.groqApiKey).toBe('a-groq-key');
     expect(groqOnly.ai.geminiApiKey).toBeUndefined();

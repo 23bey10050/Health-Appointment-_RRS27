@@ -3,7 +3,11 @@ import { eq } from 'drizzle-orm';
 import type { Database } from '../../db/client.js';
 import { googleOauthTokens } from '../../db/schema.js';
 import { decryptSecret, encryptSecret } from '../../shared/crypto.js';
-import { refreshGoogleAccessToken, type GoogleOAuthConfig, type GoogleTokenSet } from '../../providers/google-oauth.js';
+import {
+  refreshGoogleAccessToken,
+  type GoogleOAuthConfig,
+  type GoogleTokenSet,
+} from '../../providers/google-oauth.js';
 
 /** A token is refreshed a little before its real expiry, not right at it - otherwise a call that
  *  starts an instant before expiry could still land on Google's side after it, and fail for a

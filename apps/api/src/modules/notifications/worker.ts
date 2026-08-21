@@ -9,7 +9,11 @@ import type { Logger } from '../../shared/logging.js';
 
 import { claimDueNotifications, markFailed, markSent, type OutboxRow } from './outbox-store.js';
 import { loadRenderContext, type RenderContext } from './render-context.js';
-import { renderMedicationReminder, renderNotification, type NotificationSide } from './templates.js';
+import {
+  renderMedicationReminder,
+  renderNotification,
+  type NotificationSide,
+} from './templates.js';
 
 /** Which side of the appointment a row's recipient is on — the one thing that decides which of
  *  the two templates for a shared type like `booking_confirmation` gets used. */
@@ -50,7 +54,9 @@ async function sendEmail(
 function medicationReminderIdFrom(row: OutboxRow): string {
   const payload = row.payload as { medicationReminderId?: unknown };
   if (typeof payload.medicationReminderId !== 'string') {
-    throw new Error(`Outbox row ${row.id} is a medication_reminder with no medicationReminderId in its payload.`);
+    throw new Error(
+      `Outbox row ${row.id} is a medication_reminder with no medicationReminderId in its payload.`,
+    );
   }
   return payload.medicationReminderId;
 }

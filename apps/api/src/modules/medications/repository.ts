@@ -21,7 +21,12 @@ interface ScheduledAtRow extends Record<string, unknown> {
  */
 export async function expandScheduleTimes(
   db: Executor,
-  input: { startDate: string; durationDays: number; timesOfDay: readonly string[]; timezone: string },
+  input: {
+    startDate: string;
+    durationDays: number;
+    timesOfDay: readonly string[];
+    timezone: string;
+  },
 ): Promise<Date[]> {
   // Drizzle's `sql` template spreads a bare JS array across several placeholders instead of
   // binding it as one array parameter the way node-postgres itself would - passed straight
@@ -55,7 +60,10 @@ export interface NewReminder {
 /** Skips a row whose (appointment, drug, time) triple already exists rather than erroring - the
  *  unique constraint from the Phase 1 migration is what makes re-running this for the same
  *  prescription harmless instead of something this function has to guard against itself. */
-export async function insertReminders(tx: DbTransaction, reminders: readonly NewReminder[]): Promise<void> {
+export async function insertReminders(
+  tx: DbTransaction,
+  reminders: readonly NewReminder[],
+): Promise<void> {
   if (reminders.length === 0) {
     return;
   }
@@ -75,7 +83,11 @@ export async function insertReminders(tx: DbTransaction, reminders: readonly New
 }
 
 export async function findUserTimezone(tx: DbTransaction, userId: string): Promise<string> {
-  const [row] = await tx.select({ timezone: users.timezone }).from(users).where(eq(users.id, userId)).limit(1);
+  const [row] = await tx
+    .select({ timezone: users.timezone })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   if (!row) {
     throw new Error(`User ${userId} was expected to exist but does not.`);
   }
@@ -89,11 +101,15 @@ export type DueMedicationReminder = typeof medicationReminders.$inferSelect;
 /** The dispatcher's own claim step - `FOR UPDATE SKIP LOCKED` so two overlapping ticks (a slow one
  *  still running when the next fires) never queue the same reminder twice, the same guarantee the
  *  outbox's own claim step relies on. */
-export async function claimDueMedicationReminders(tx: DbTransaction): Promise<DueMedicationReminder[]> {
+export async function claimDueMedicationReminders(
+  tx: DbTransaction,
+): Promise<DueMedicationReminder[]> {
   return tx
     .select()
     .from(medicationReminders)
-    .where(and(lte(medicationReminders.scheduledAt, new Date()), isNull(medicationReminders.queuedAt)))
+    .where(
+      and(lte(medicationReminders.scheduledAt, new Date()), isNull(medicationReminders.queuedAt)),
+    )
     .orderBy(asc(medicationReminders.scheduledAt))
     .limit(DISPATCH_BATCH_SIZE)
     .for('update', { skipLocked: true });

@@ -35,7 +35,7 @@ export function buildPostvisitPrompt(doctorNotes: string): SummaryPrompt {
       '{"summary": string, "followUpSteps": array of short strings}. No text before or after the ' +
       'JSON, and no markdown code fences around it.',
     user:
-      "Turn these clinical notes into a short, friendly summary and a list of follow-up steps for " +
+      'Turn these clinical notes into a short, friendly summary and a list of follow-up steps for ' +
       `the patient.\n\nNotes: ${doctorNotes}`,
   };
 }

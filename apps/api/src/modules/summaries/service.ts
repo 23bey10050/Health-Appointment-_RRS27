@@ -8,7 +8,12 @@ import { describeUnknownError } from '../../shared/errors.js';
 import type { Logger } from '../../shared/logging.js';
 
 import { runSummaryChain, type SummaryAttempt } from './chain.js';
-import { buildPostvisitPrompt, buildPrevisitPrompt, POSTVISIT_PROMPT_VERSION, PREVISIT_PROMPT_VERSION } from './prompts.js';
+import {
+  buildPostvisitPrompt,
+  buildPrevisitPrompt,
+  POSTVISIT_PROMPT_VERSION,
+  PREVISIT_PROMPT_VERSION,
+} from './prompts.js';
 import type { SummaryProvider } from './provider.js';
 
 const PREVISIT_FALLBACK_TEXT =
@@ -77,8 +82,18 @@ export async function triggerPrevisitSummary(
       .set({ aiPrevisitStatus: 'pending' })
       .where(eq(appointments.id, appointmentId));
 
-    const result = await runSummaryChain(providers, buildPrevisitPrompt(symptoms), previsitSummarySchema);
-    await logAttempts(database, appointmentId, 'previsit_summary_attempt', PREVISIT_PROMPT_VERSION, result.attempts);
+    const result = await runSummaryChain(
+      providers,
+      buildPrevisitPrompt(symptoms),
+      previsitSummarySchema,
+    );
+    await logAttempts(
+      database,
+      appointmentId,
+      'previsit_summary_attempt',
+      PREVISIT_PROMPT_VERSION,
+      result.attempts,
+    );
 
     if (result.success) {
       await database.db
@@ -121,8 +136,18 @@ export async function triggerPostvisitSummary(
       .set({ aiPostvisitStatus: 'pending' })
       .where(eq(appointments.id, appointmentId));
 
-    const result = await runSummaryChain(providers, buildPostvisitPrompt(doctorNotes), postvisitSummarySchema);
-    await logAttempts(database, appointmentId, 'postvisit_summary_attempt', POSTVISIT_PROMPT_VERSION, result.attempts);
+    const result = await runSummaryChain(
+      providers,
+      buildPostvisitPrompt(doctorNotes),
+      postvisitSummarySchema,
+    );
+    await logAttempts(
+      database,
+      appointmentId,
+      'postvisit_summary_attempt',
+      POSTVISIT_PROMPT_VERSION,
+      result.attempts,
+    );
 
     if (result.success) {
       await database.db

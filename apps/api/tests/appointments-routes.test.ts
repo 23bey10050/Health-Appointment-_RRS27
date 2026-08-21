@@ -72,12 +72,17 @@ async function waitForAiStatus(
 ): Promise<void> {
   const deadline = Date.now() + 2000;
   for (;;) {
-    const [row] = await database.db.select().from(appointments).where(eq(appointments.id, appointmentId));
+    const [row] = await database.db
+      .select()
+      .from(appointments)
+      .where(eq(appointments.id, appointmentId));
     if (row?.[column] === expected) {
       return;
     }
     if (Date.now() > deadline) {
-      throw new Error(`Timed out waiting for ${column} to become "${expected}", last saw "${row?.[column]}".`);
+      throw new Error(
+        `Timed out waiting for ${column} to become "${expected}", last saw "${row?.[column]}".`,
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
@@ -346,7 +351,7 @@ describe('POST /appointments/:id/notes', () => {
     return response.json<Appointment>();
   }
 
-  it("the assigned doctor can submit notes, which completes the visit and stores the prescription", async () => {
+  it('the assigned doctor can submit notes, which completes the visit and stores the prescription', async () => {
     const appointment = await bookOne();
 
     const response = await app.inject({
@@ -355,9 +360,7 @@ describe('POST /appointments/:id/notes', () => {
       headers: authed(assignedDoctorToken),
       payload: {
         doctorNotes: 'Mild seasonal allergy. Advised rest and fluids.',
-        prescription: [
-          { drug: 'Cetirizine', dosage: '10mg', timesPerDay: 1, durationDays: 5 },
-        ],
+        prescription: [{ drug: 'Cetirizine', dosage: '10mg', timesPerDay: 1, durationDays: 5 }],
       },
     });
 
@@ -387,7 +390,9 @@ describe('POST /appointments/:id/notes', () => {
       url: `/appointments/${appointment.id}`,
       headers: authed(patient.token),
     });
-    expect(response.json<Appointment>().aiPostvisitSummary).toMatch(/could not be generated automatically/);
+    expect(response.json<Appointment>().aiPostvisitSummary).toMatch(
+      /could not be generated automatically/,
+    );
   });
 
   it('an unrelated doctor gets 404, not a hint that the appointment exists', async () => {

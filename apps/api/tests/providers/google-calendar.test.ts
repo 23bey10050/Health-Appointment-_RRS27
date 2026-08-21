@@ -54,7 +54,9 @@ describe('insertCalendarEvent', () => {
   it('throws a clear error for a genuine rejection', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(jsonResponse(403, { error: { message: 'Insufficient permission' } })),
+      vi
+        .fn()
+        .mockResolvedValue(jsonResponse(403, { error: { message: 'Insufficient permission' } })),
     );
 
     await expect(insertCalendarEvent('an-access-token', event)).rejects.toThrow(

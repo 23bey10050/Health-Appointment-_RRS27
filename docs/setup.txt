@@ -68,6 +68,21 @@ RUN IT LOCALLY (about two minutes, no online accounts needed)
      /health answers even when the database is down, on purpose. /ready is the
      one that tells you whether Postgres is actually reachable.
 
+  7. In a second terminal, start the browser app:
+
+       npm run dev:web
+
+     Open http://localhost:5173 - that is the whole patient portal. Register a
+     new account (always a patient, whatever the form is asked to send - the
+     API itself enforces that) or sign in with one of the demo logins above,
+     search for a doctor, hold a slot, fill in the symptom form, and the
+     appointment is real: it is in Postgres, and if BREVO_API_KEY is not set,
+     its confirmation email is sitting in the API's own terminal window.
+
+     Doctor and admin accounts can sign in too - they land on an honest "not
+     built yet" screen rather than one that quietly fails, since only the
+     patient portal exists so far.
+
 -------------------------------------------------------------------------------
 IF PORT 5432 IS ALREADY TAKEN
 -------------------------------------------------------------------------------
@@ -81,11 +96,12 @@ USEFUL COMMANDS
 -------------------------------------------------------------------------------
 
   npm run dev            Start the API with auto-reload
-  npm run check          Formatting + lint + types + tests, the full gate
-  npm test               Tests only
+  npm run dev:web        Start the browser app with hot reload, on :5173
+  npm run check          Formatting + lint + types + tests + the web build, the full gate
+  npm test               API tests only
   npm run lint           Lint only
   npm run format         Rewrite files to the shared formatting rules
-  npm run build          Compile every workspace to dist/
+  npm run build          Compile every workspace, including the web app's production bundle
   npm run db:up          Start local Postgres
   npm run db:down        Stop local Postgres
   npm run db:migrate     Bring the database schema up to date
@@ -427,6 +443,22 @@ itself. Faking it would only prove the fake agrees with the test.
 The suite creates its own database called health_appointment_test and migrates
 it automatically. Your development data is never touched.
 
+There is a second, separate suite for the browser app - a handful of end-to-end
+tests that drive a real headless browser through the actual patient journey
+(search, hold, confirm, cancel) against the real API and a real database. It
+needs both servers already running, which is real infrastructure npm run check
+should never have to assume exists, so it stays out of that gate and runs on
+its own:
+
+  npm run dev             (terminal 1)
+  npm run dev:web         (terminal 2)
+  npx playwright install chromium --with-deps   (one time only)
+  npm run e2e --workspace @health/web
+
+That one-time install step downloads a headless Chromium build (a few hundred
+MB) - Playwright's own test runner will refuse to start and tell you to run it
+if you skip this and it is missing.
+
 -------------------------------------------------------------------------------
 FREE HOSTED SERVICES
 -------------------------------------------------------------------------------
@@ -466,6 +498,13 @@ PROJECT LAYOUT
 
   apps/api                 The HTTP API and the background scheduler
   apps/api/src/db          Schema, migrations, seed data
+  apps/web                 The patient/doctor/admin portals - a Vite + React
+                           single-page app, statically hosted
+  apps/web/src/lib         The typed API client, the in-memory session, and
+                           the TanStack Query client's own retry/stale rules
+  apps/web/src/features    Auth actions/hooks and each resource's query hooks
+  apps/web/src/routes      One file per page, each its own lazy-loaded chunk
+  apps/web/e2e             End-to-end tests driving a real headless browser
   packages/contracts       Zod schemas shared by the API and the browser, so
                            the two can never disagree about a payload shape
   scripts/                 Small build and setup helpers, plain Node

@@ -13,7 +13,12 @@ import {
   type NewReminder,
 } from '../../../src/modules/medications/repository.js';
 import { createTestDatabase, resetDatabase } from '../../helpers/database.js';
-import { createConfirmedAppointment, createDoctor, createPatient, slotAt } from '../../helpers/fixtures.js';
+import {
+  createConfirmedAppointment,
+  createDoctor,
+  createPatient,
+  slotAt,
+} from '../../helpers/fixtures.js';
 
 let database: Database;
 
@@ -82,7 +87,11 @@ describe('expandScheduleTimes', () => {
 async function bookedAppointment(): Promise<{ appointmentId: string; patientId: string }> {
   const doctorId = await createDoctor(database);
   const patientId = await createPatient(database);
-  const appointmentId = await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(9) });
+  const appointmentId = await createConfirmedAppointment(database, {
+    doctorId,
+    patientId,
+    slot: slotAt(9),
+  });
   return { appointmentId, patientId };
 }
 
@@ -90,26 +99,53 @@ describe('insertReminders', () => {
   it('inserts one row per instant', async () => {
     const { appointmentId, patientId } = await bookedAppointment();
     const reminders: NewReminder[] = [
-      { appointmentId, patientId, drugName: 'Ibuprofen', dosage: '400mg', instructions: undefined, scheduledAt: new Date('2026-09-01T08:00:00.000Z') },
-      { appointmentId, patientId, drugName: 'Ibuprofen', dosage: '400mg', instructions: undefined, scheduledAt: new Date('2026-09-02T08:00:00.000Z') },
+      {
+        appointmentId,
+        patientId,
+        drugName: 'Ibuprofen',
+        dosage: '400mg',
+        instructions: undefined,
+        scheduledAt: new Date('2026-09-01T08:00:00.000Z'),
+      },
+      {
+        appointmentId,
+        patientId,
+        drugName: 'Ibuprofen',
+        dosage: '400mg',
+        instructions: undefined,
+        scheduledAt: new Date('2026-09-02T08:00:00.000Z'),
+      },
     ];
 
     await database.transaction((tx) => insertReminders(tx, reminders));
 
-    const rows = await database.db.select().from(medicationReminders).where(eq(medicationReminders.appointmentId, appointmentId));
+    const rows = await database.db
+      .select()
+      .from(medicationReminders)
+      .where(eq(medicationReminders.appointmentId, appointmentId));
     expect(rows).toHaveLength(2);
   });
 
   it('running it twice for the same schedule does not duplicate any row', async () => {
     const { appointmentId, patientId } = await bookedAppointment();
     const reminders: NewReminder[] = [
-      { appointmentId, patientId, drugName: 'Ibuprofen', dosage: '400mg', instructions: undefined, scheduledAt: new Date('2026-09-01T08:00:00.000Z') },
+      {
+        appointmentId,
+        patientId,
+        drugName: 'Ibuprofen',
+        dosage: '400mg',
+        instructions: undefined,
+        scheduledAt: new Date('2026-09-01T08:00:00.000Z'),
+      },
     ];
 
     await database.transaction((tx) => insertReminders(tx, reminders));
     await database.transaction((tx) => insertReminders(tx, reminders));
 
-    const rows = await database.db.select().from(medicationReminders).where(eq(medicationReminders.appointmentId, appointmentId));
+    const rows = await database.db
+      .select()
+      .from(medicationReminders)
+      .where(eq(medicationReminders.appointmentId, appointmentId));
     expect(rows).toHaveLength(1);
   });
 
@@ -139,7 +175,12 @@ describe('claimDueMedicationReminders / markReminderQueued', () => {
     const { appointmentId, patientId } = await bookedAppointment();
     await database.db.insert(medicationReminders).values([
       { appointmentId, patientId, drugName: 'Due now', scheduledAt: new Date(Date.now() - 60_000) },
-      { appointmentId, patientId, drugName: 'Not due yet', scheduledAt: new Date(Date.now() + 60 * 60_000) },
+      {
+        appointmentId,
+        patientId,
+        drugName: 'Not due yet',
+        scheduledAt: new Date(Date.now() + 60 * 60_000),
+      },
     ]);
 
     const due = await database.transaction((tx) => claimDueMedicationReminders(tx));
@@ -166,7 +207,12 @@ describe('claimDueMedicationReminders / markReminderQueued', () => {
     const { appointmentId, patientId } = await bookedAppointment();
     const [row] = await database.db
       .insert(medicationReminders)
-      .values({ appointmentId, patientId, drugName: 'Due now', scheduledAt: new Date(Date.now() - 60_000) })
+      .values({
+        appointmentId,
+        patientId,
+        drugName: 'Due now',
+        scheduledAt: new Date(Date.now() - 60_000),
+      })
       .returning({ id: medicationReminders.id });
 
     await database.transaction((tx) => markReminderQueued(tx, row!.id));
@@ -181,13 +227,22 @@ describe('findMedicationReminderById', () => {
     const { appointmentId, patientId } = await bookedAppointment();
     const [row] = await database.db
       .insert(medicationReminders)
-      .values({ appointmentId, patientId, drugName: 'Cetirizine', dosage: '10mg', scheduledAt: new Date() })
+      .values({
+        appointmentId,
+        patientId,
+        drugName: 'Cetirizine',
+        dosage: '10mg',
+        scheduledAt: new Date(),
+      })
       .returning({ id: medicationReminders.id });
 
     const found = await findMedicationReminderById(database, row!.id);
     expect(found?.drugName).toBe('Cetirizine');
 
-    const notFound = await findMedicationReminderById(database, '00000000-0000-4000-8000-000000000000');
+    const notFound = await findMedicationReminderById(
+      database,
+      '00000000-0000-4000-8000-000000000000',
+    );
     expect(notFound).toBeUndefined();
   });
 });

@@ -85,23 +85,32 @@ export class GoogleCalendarSync implements CalendarSync {
  *  or cancellation behaves identically whether nobody has ever set up Google or everybody has and
  *  simply hasn't connected their own account yet. */
 export class NoopCalendarSync implements CalendarSync {
-  upsertEvent(): Promise<string | undefined> {
+  upsertEvent(_userId: string, _event: CalendarEventDetails): Promise<string | undefined> {
     return Promise.resolve(undefined);
   }
 
-  deleteEvent(): Promise<void> {
+  deleteEvent(_userId: string, _eventId: string): Promise<void> {
     return Promise.resolve();
   }
 }
 
 export function buildCalendarSync(database: Database, config: AppConfig): CalendarSync {
   const { google } = config;
-  if (!google.clientId || !google.clientSecret || !google.redirectUri || !google.tokenEncryptionKey) {
+  if (
+    !google.clientId ||
+    !google.clientSecret ||
+    !google.redirectUri ||
+    !google.tokenEncryptionKey
+  ) {
     return new NoopCalendarSync();
   }
   return new GoogleCalendarSync(
     database,
-    { clientId: google.clientId, clientSecret: google.clientSecret, redirectUri: google.redirectUri },
+    {
+      clientId: google.clientId,
+      clientSecret: google.clientSecret,
+      redirectUri: google.redirectUri,
+    },
     google.tokenEncryptionKey,
   );
 }

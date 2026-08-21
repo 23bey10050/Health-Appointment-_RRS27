@@ -1,0 +1,35 @@
+{
+  "name": "@health/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The patient, doctor and admin portals - a static single-page app talking to the API over fetch.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && cross-env NODE_ENV=production vite build",
+    "preview": "vite preview",
+    "e2e": "playwright test",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@health/contracts": "*",
+    "@hookform/resolvers": "^5.9.1",
+    "@tanstack/react-query": "^5.101.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-hook-form": "^7.85.0",
+    "react-router": "^8.3.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "cross-env": "^10.1.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2"
+  }
+}

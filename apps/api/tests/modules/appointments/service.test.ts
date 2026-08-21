@@ -2,7 +2,12 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Database } from '../../../src/db/client.js';
-import { auditLog, medicationReminders, notificationOutbox, slotHolds } from '../../../src/db/schema.js';
+import {
+  auditLog,
+  medicationReminders,
+  notificationOutbox,
+  slotHolds,
+} from '../../../src/db/schema.js';
 import * as appointmentService from '../../../src/modules/appointments/service.js';
 import { AppError } from '../../../src/shared/errors.js';
 import { createTestDatabase, resetDatabase } from '../../helpers/database.js';
@@ -552,9 +557,17 @@ describe('submitNotes', () => {
     appointmentId: string;
   }> {
     const doctorId = await createBookableDoctor();
-    const patientId = await createPatient(database, patientTimezone ? { timezone: patientTimezone } : {});
+    const patientId = await createPatient(
+      database,
+      patientTimezone ? { timezone: patientTimezone } : {},
+    );
     const hold = await appointmentService.holdSlot(database, patientId, doctorId, SLOT_START);
-    const appointment = await appointmentService.confirmHold(database, patientId, hold.id, 'a visit');
+    const appointment = await appointmentService.confirmHold(
+      database,
+      patientId,
+      hold.id,
+      'a visit',
+    );
     return { doctorId, patientId, appointmentId: appointment.id };
   }
 
@@ -578,7 +591,13 @@ describe('submitNotes', () => {
   it('schedules nothing when the prescription is empty - notes without medication are common', async () => {
     const { doctorId, appointmentId } = await bookOne();
 
-    await appointmentService.submitNotes(database, doctorId, appointmentId, 'Notes only, no medication.', []);
+    await appointmentService.submitNotes(
+      database,
+      doctorId,
+      appointmentId,
+      'Notes only, no medication.',
+      [],
+    );
 
     const rows = await database.db
       .select()

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderMedicationReminder, renderNotification } from '../../../src/modules/notifications/templates.js';
+import {
+  renderMedicationReminder,
+  renderNotification,
+} from '../../../src/modules/notifications/templates.js';
 import type { RenderContext } from '../../../src/modules/notifications/render-context.js';
 
 const baseContext: RenderContext = {
@@ -99,11 +102,10 @@ describe('renderNotification: leave_conflict', () => {
   });
 
   it("never repeats the leave's own internal reason back to the patient", () => {
-    const email = renderNotification(
-      'leave_conflict',
-      'patient',
-      { ...baseContext, cancellationReason: 'Doctor requested emergency sick leave' },
-    );
+    const email = renderNotification('leave_conflict', 'patient', {
+      ...baseContext,
+      cancellationReason: 'Doctor requested emergency sick leave',
+    });
 
     expect(email.text).not.toContain('emergency sick leave');
   });

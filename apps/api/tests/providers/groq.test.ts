@@ -19,9 +19,11 @@ afterEach(() => {
 
 describe('GroqSummaryProvider', () => {
   it('sends the exact request shape Groq documents for its chat completions endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { choices: [{ message: { content: '{"answer":"ok"}' } }] }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { choices: [{ message: { content: '{"answer":"ok"}' } }] }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const provider = new GroqSummaryProvider('the-api-key');
 

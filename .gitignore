@@ -19,3 +19,8 @@ npm-debug.log*
 Thumbs.db
 .idea/
 .vscode/
+
+# Playwright's own run output - screenshots, traces, the HTML report - regenerated every run.
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/

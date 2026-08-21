@@ -9,7 +9,12 @@ import {
   triggerPrevisitSummary,
 } from '../../../src/modules/summaries/service.js';
 import { createTestDatabase, resetDatabase } from '../../helpers/database.js';
-import { createConfirmedAppointment, createDoctor, createPatient, slotAt } from '../../helpers/fixtures.js';
+import {
+  createConfirmedAppointment,
+  createDoctor,
+  createPatient,
+  slotAt,
+} from '../../helpers/fixtures.js';
 
 let database: Database;
 
@@ -40,7 +45,10 @@ async function bookedAppointment(): Promise<string> {
 }
 
 async function loadAppointment(appointmentId: string) {
-  const [row] = await database.db.select().from(appointments).where(eq(appointments.id, appointmentId));
+  const [row] = await database.db
+    .select()
+    .from(appointments)
+    .where(eq(appointments.id, appointmentId));
   if (!row) {
     throw new Error('Appointment fixture went missing mid-test.');
   }
@@ -55,7 +63,13 @@ describe('triggerPrevisitSummary', () => {
       '{"urgency":"medium","chiefComplaint":"Persistent headache","suggestedQuestions":["How long has this lasted?"]}',
     );
 
-    await triggerPrevisitSummary(database, appointmentId, 'Headache for three days', [groq], silentLogger());
+    await triggerPrevisitSummary(
+      database,
+      appointmentId,
+      'Headache for three days',
+      [groq],
+      silentLogger(),
+    );
 
     const row = await loadAppointment(appointmentId);
     expect(row.aiPrevisitStatus).toBe('ready');
@@ -68,7 +82,13 @@ describe('triggerPrevisitSummary', () => {
   it('falls back to the deterministic template when no provider is configured at all', async () => {
     const appointmentId = await bookedAppointment();
 
-    await triggerPrevisitSummary(database, appointmentId, 'Headache for three days', [], silentLogger());
+    await triggerPrevisitSummary(
+      database,
+      appointmentId,
+      'Headache for three days',
+      [],
+      silentLogger(),
+    );
 
     const row = await loadAppointment(appointmentId);
     expect(row.aiPrevisitStatus).toBe('unavailable');
@@ -77,9 +97,18 @@ describe('triggerPrevisitSummary', () => {
 
   it('falls back to the template when every configured provider fails', async () => {
     const appointmentId = await bookedAppointment();
-    const groq: SummaryProvider = { name: 'groq', complete: vi.fn().mockRejectedValue(new Error('down')) };
+    const groq: SummaryProvider = {
+      name: 'groq',
+      complete: vi.fn().mockRejectedValue(new Error('down')),
+    };
 
-    await triggerPrevisitSummary(database, appointmentId, 'Headache for three days', [groq], silentLogger());
+    await triggerPrevisitSummary(
+      database,
+      appointmentId,
+      'Headache for three days',
+      [groq],
+      silentLogger(),
+    );
 
     const row = await loadAppointment(appointmentId);
     expect(row.aiPrevisitStatus).toBe('unavailable');
@@ -101,10 +130,22 @@ describe('triggerPrevisitSummary', () => {
 
   it('logs one audit entry per attempt made', async () => {
     const appointmentId = await bookedAppointment();
-    const groq: SummaryProvider = { name: 'groq', complete: vi.fn().mockRejectedValue(new Error('down')) };
-    const gemini = providerReturning('gemini', '{"urgency":"low","chiefComplaint":"Mild cold","suggestedQuestions":["Any fever?"]}');
+    const groq: SummaryProvider = {
+      name: 'groq',
+      complete: vi.fn().mockRejectedValue(new Error('down')),
+    };
+    const gemini = providerReturning(
+      'gemini',
+      '{"urgency":"low","chiefComplaint":"Mild cold","suggestedQuestions":["Any fever?"]}',
+    );
 
-    await triggerPrevisitSummary(database, appointmentId, 'Runny nose', [groq, gemini], silentLogger());
+    await triggerPrevisitSummary(
+      database,
+      appointmentId,
+      'Runny nose',
+      [groq, gemini],
+      silentLogger(),
+    );
 
     const rows = await database.db
       .select()
@@ -140,7 +181,13 @@ describe('triggerPostvisitSummary', () => {
       '{"summary":"You have a mild infection.","followUpSteps":["Rest for two days","Drink plenty of water"]}',
     );
 
-    await triggerPostvisitSummary(database, appointmentId, 'Diagnosed with a mild infection.', [groq], silentLogger());
+    await triggerPostvisitSummary(
+      database,
+      appointmentId,
+      'Diagnosed with a mild infection.',
+      [groq],
+      silentLogger(),
+    );
 
     const row = await loadAppointment(appointmentId);
     expect(row.aiPostvisitStatus).toBe('ready');
@@ -152,7 +199,13 @@ describe('triggerPostvisitSummary', () => {
   it('falls back to the deterministic template when no provider is configured at all', async () => {
     const appointmentId = await bookedAppointment();
 
-    await triggerPostvisitSummary(database, appointmentId, 'Some clinical notes.', [], silentLogger());
+    await triggerPostvisitSummary(
+      database,
+      appointmentId,
+      'Some clinical notes.',
+      [],
+      silentLogger(),
+    );
 
     const row = await loadAppointment(appointmentId);
     expect(row.aiPostvisitStatus).toBe('unavailable');

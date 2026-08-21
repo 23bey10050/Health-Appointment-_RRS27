@@ -1,4 +1,8 @@
 import js from '@eslint/js';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -59,6 +63,25 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
+    },
+  },
+  {
+    // The browser app, and only the browser app - `window`, `fetch` and `localStorage` are real
+    // globals here, not typos, and the two React-specific plugins have nothing useful to say
+    // about a Fastify route handler on the other side of this monorepo.
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh, 'jsx-a11y': jsxA11y },
+    languageOptions: {
+      globals: globals.browser,
+    },
+    rules: {
+      ...reactHooks.configs['recommended-latest'].rules,
+      ...jsxA11y.flatConfigs.recommended.rules,
+      // Vite's Fast Refresh needs a component file to export only components - a stray helper
+      // function exported alongside one silently breaks hot reload for that file. `Component` is
+      // this project's own convention for a lazy route's default export (see router.tsx), which
+      // is exactly the shape this rule expects.
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
 );

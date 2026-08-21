@@ -20,7 +20,10 @@ describe('signOAuthState / verifyOAuthState', () => {
   it('rejects a tampered payload even if the signature format still looks right', () => {
     const state = signOAuthState('user-123', SECRET);
     const [, signature] = state.split('.');
-    const forgedPayload = Buffer.from(JSON.stringify({ userId: 'someone-else', expiresAt: Date.now() + 60_000 }), 'utf8').toString('base64url');
+    const forgedPayload = Buffer.from(
+      JSON.stringify({ userId: 'someone-else', expiresAt: Date.now() + 60_000 }),
+      'utf8',
+    ).toString('base64url');
 
     expect(verifyOAuthState(`${forgedPayload}.${signature}`, SECRET)).toBeUndefined();
   });

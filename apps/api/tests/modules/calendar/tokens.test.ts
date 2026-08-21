@@ -98,7 +98,11 @@ describe('saveGoogleTokens / getValidAccessToken', () => {
     await saveGoogleTokens(database, userId, tokenSet({ expiresInSeconds: -60 }), ENCRYPTION_KEY);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(jsonResponse(200, { access_token: 'a-refreshed-token', expires_in: 3600 })),
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(200, { access_token: 'a-refreshed-token', expires_in: 3600 }),
+        ),
     );
 
     const accessToken = await getValidAccessToken(database, OAUTH_CONFIG, userId, ENCRYPTION_KEY);
@@ -116,11 +120,14 @@ describe('saveGoogleTokens / getValidAccessToken', () => {
   it('surfaces a revoked grant as a real, clearly worded error rather than a silent skip', async () => {
     const userId = await createPatient(database);
     await saveGoogleTokens(database, userId, tokenSet({ expiresInSeconds: -60 }), ENCRYPTION_KEY);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(400, { error: 'invalid_grant' })));
-
-    await expect(getValidAccessToken(database, OAUTH_CONFIG, userId, ENCRYPTION_KEY)).rejects.toThrow(
-      /revoked or has expired/,
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(400, { error: 'invalid_grant' })),
     );
+
+    await expect(
+      getValidAccessToken(database, OAUTH_CONFIG, userId, ENCRYPTION_KEY),
+    ).rejects.toThrow(/revoked or has expired/);
   });
 });
 

@@ -12,12 +12,18 @@ const prompt: SummaryPrompt = { system: 'be helpful', user: 'summarise this' };
  *  this sidesteps that without losing the check. */
 function providerReturning(name: string, text: string) {
   const complete = vi.fn().mockResolvedValue(text);
-  return { provider: { name, complete } satisfies SummaryProvider, callCount: () => complete.mock.calls.length };
+  return {
+    provider: { name, complete } satisfies SummaryProvider,
+    callCount: () => complete.mock.calls.length,
+  };
 }
 
 function providerRejecting(name: string, error: unknown) {
   const complete = vi.fn().mockRejectedValue(error);
-  return { provider: { name, complete } satisfies SummaryProvider, callCount: () => complete.mock.calls.length };
+  return {
+    provider: { name, complete } satisfies SummaryProvider,
+    callCount: () => complete.mock.calls.length,
+  };
 }
 
 describe('runSummaryChain', () => {

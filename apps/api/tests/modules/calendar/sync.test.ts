@@ -4,7 +4,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import type { AppConfig } from '../../../src/config/env.js';
 import type { Database } from '../../../src/db/client.js';
-import { buildCalendarSync, eventIdFor, GoogleCalendarSync, NoopCalendarSync } from '../../../src/modules/calendar/sync.js';
+import {
+  buildCalendarSync,
+  eventIdFor,
+  GoogleCalendarSync,
+  NoopCalendarSync,
+} from '../../../src/modules/calendar/sync.js';
 import { saveGoogleTokens } from '../../../src/modules/calendar/tokens.js';
 import { createTestDatabase, resetDatabase } from '../../helpers/database.js';
 import { createPatient } from '../../helpers/fixtures.js';
@@ -29,7 +34,9 @@ function jsonResponse(status: number, body: unknown): Response {
 
 describe('eventIdFor', () => {
   it('strips the hyphens, leaving only the lowercase hex characters Google requires', () => {
-    expect(eventIdFor('11111111-2222-3333-4444-555555555555')).toBe('11111111222233334444555555555555');
+    expect(eventIdFor('11111111-2222-3333-4444-555555555555')).toBe(
+      '11111111222233334444555555555555',
+    );
   });
 
   it('is deterministic - the same appointment always produces the same id', () => {
@@ -48,7 +55,16 @@ describe('NoopCalendarSync', () => {
 
 describe('buildCalendarSync', () => {
   function configWith(google: Partial<AppConfig['google']>): AppConfig {
-    return { ...buildTestConfig(), google: { clientId: undefined, clientSecret: undefined, redirectUri: undefined, tokenEncryptionKey: undefined, ...google } };
+    return {
+      ...buildTestConfig(),
+      google: {
+        clientId: undefined,
+        clientSecret: undefined,
+        redirectUri: undefined,
+        tokenEncryptionKey: undefined,
+        ...google,
+      },
+    };
   }
 
   it('builds a NoopCalendarSync when nothing is configured', () => {
@@ -117,10 +133,17 @@ describe('GoogleCalendarSync', () => {
     await saveGoogleTokens(
       database,
       userId,
-      { accessToken: 'token', refreshToken: 'refresh', expiresInSeconds: 3600, scope: 'calendar.events' },
+      {
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        expiresInSeconds: 3600,
+        scope: 'calendar.events',
+      },
       ENCRYPTION_KEY,
     );
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { id: eventIdFor(event.appointmentId) }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { id: eventIdFor(event.appointmentId) }));
     vi.stubGlobal('fetch', fetchMock);
 
     const eventId = await sync.upsertEvent(userId, event);

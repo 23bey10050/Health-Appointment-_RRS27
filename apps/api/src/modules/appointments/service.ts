@@ -251,8 +251,7 @@ export async function cancelAppointmentByRequester(
     // Cancelling stays patient-and-admin only, unlike the read above - a doctor needing to cancel
     // a patient's booking is a real workflow, but not one this phase's AI summary work touches, so
     // it is left as it was rather than widened on the side.
-    const canCancel =
-      requester.role === 'admin' || requester.id === appointment?.patientId;
+    const canCancel = requester.role === 'admin' || requester.id === appointment?.patientId;
     if (!appointment || !canCancel) {
       throw new NotFoundError('No appointment with that id.');
     }

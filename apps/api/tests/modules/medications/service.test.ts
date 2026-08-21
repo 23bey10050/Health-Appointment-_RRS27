@@ -5,7 +5,12 @@ import type { Database } from '../../../src/db/client.js';
 import { medicationReminders } from '../../../src/db/schema.js';
 import { scheduleMedicationReminders } from '../../../src/modules/medications/service.js';
 import { createTestDatabase, resetDatabase } from '../../helpers/database.js';
-import { createConfirmedAppointment, createDoctor, createPatient, slotAt } from '../../helpers/fixtures.js';
+import {
+  createConfirmedAppointment,
+  createDoctor,
+  createPatient,
+  slotAt,
+} from '../../helpers/fixtures.js';
 
 let database: Database;
 
@@ -27,7 +32,11 @@ async function bookedAppointment(patientTimezone = 'Asia/Kolkata'): Promise<{
 }> {
   const doctorId = await createDoctor(database);
   const patientId = await createPatient(database, { timezone: patientTimezone });
-  const appointmentId = await createConfirmedAppointment(database, { doctorId, patientId, slot: slotAt(9) });
+  const appointmentId = await createConfirmedAppointment(database, {
+    doctorId,
+    patientId,
+    slot: slotAt(9),
+  });
   return { appointmentId, patientId };
 }
 
@@ -83,7 +92,13 @@ describe('scheduleMedicationReminders', () => {
         patientId,
         patientTimezone: 'Asia/Kolkata',
         prescription: [
-          { drug: 'Ibuprofen', dosage: '400mg', timesPerDay: 1, durationDays: 2, instructions: 'Take after food' },
+          {
+            drug: 'Ibuprofen',
+            dosage: '400mg',
+            timesPerDay: 1,
+            durationDays: 2,
+            instructions: 'Take after food',
+          },
         ],
       }),
     );
@@ -92,7 +107,9 @@ describe('scheduleMedicationReminders', () => {
       .select()
       .from(medicationReminders)
       .where(eq(medicationReminders.appointmentId, appointmentId));
-    expect(rows.every((r) => r.dosage === '400mg' && r.instructions === 'Take after food')).toBe(true);
+    expect(rows.every((r) => r.dosage === '400mg' && r.instructions === 'Take after food')).toBe(
+      true,
+    );
   });
 
   it('does nothing for an empty prescription', async () => {

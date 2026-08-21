@@ -85,7 +85,14 @@ describe('completeConnection', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
-      completeConnection(database, OAUTH_CONFIG, ENCRYPTION_KEY, STATE_SECRET, 'a-code', 'not-a-real-state'),
+      completeConnection(
+        database,
+        OAUTH_CONFIG,
+        ENCRYPTION_KEY,
+        STATE_SECRET,
+        'a-code',
+        'not-a-real-state',
+      ),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
