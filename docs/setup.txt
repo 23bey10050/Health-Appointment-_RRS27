@@ -334,6 +334,51 @@ to fail, the same fallback message is used.
       -c "SELECT action, metadata FROM audit_log WHERE action LIKE '%summary_attempt%';"
 
 -------------------------------------------------------------------------------
+GOOGLE CALENDAR SYNC
+-------------------------------------------------------------------------------
+
+Booking an appointment queues an event for both sides' own Google Calendar; cancelling queues its
+deletion. Both travel through the same notification_outbox every email already uses, just on
+channel='calendar' instead of channel='email' - a slow or failed Google call can never delay a
+booking response, for exactly the same reason a slow email send cannot.
+
+With none of the four GOOGLE_* variables set (see .env.local), every appointment simply gets no
+calendar event, for anyone - not an error, not a retry, not a log line. That is the real, fully
+supported way this project runs today, since no Google Cloud project has been set up for it yet.
+
+Once configured, a user connects their own calendar with their own access token - patient and
+doctor are independent, and a side that never connects just keeps getting no event while
+everything else about their appointments works exactly as before:
+
+  curl "http://localhost:4000/auth/google/connect" \
+    -H "Authorization: Bearer <accessToken>"
+
+Returns a real Google consent URL - open it in a browser signed into the Google account you added
+as a test user, approve access, and Google redirects back to /auth/google/callback, which answers
+with a small HTML page rather than JSON, since a real browser tab lands there, not an API client.
+
+  curl "http://localhost:4000/auth/google/status" \
+    -H "Authorization: Bearer <accessToken>"
+
+  curl -X POST "http://localhost:4000/auth/google/disconnect" \
+    -H "Authorization: Bearer <accessToken>"
+
+Disconnecting deletes the stored, encrypted tokens and makes a best-effort attempt to revoke them
+at Google's end too - the local delete is what actually matters, and never waits on that second
+call succeeding.
+
+Every stored access and refresh token is encrypted at rest with AES-256-GCM before it ever reaches
+the database - GOOGLE_TOKEN_ENCRYPTION_KEY is the only thing that can decrypt them, and it never
+leaves this server. A revoked or expired connection is not silently ignored: the next attempt to
+sync that person's calendar fails with a clear reason and follows the outbox's normal backoff,
+eventually reaching the same dead-letter dashboard as an email that could not be sent.
+
+    curl http://localhost:4000/admin/notifications/dead-letter \
+      -H "Authorization: Bearer <adminAccessToken>"
+
+Retrying a dead-lettered calendar row after reconnecting works exactly like retrying an email one.
+
+-------------------------------------------------------------------------------
 RUNNING THE TESTS
 -------------------------------------------------------------------------------
 

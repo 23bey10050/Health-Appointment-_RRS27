@@ -192,10 +192,35 @@ describe('confirmHold', () => {
       .select()
       .from(notificationOutbox)
       .where(eq(notificationOutbox.appointmentId, appointment.id));
-    expect(rows).toHaveLength(2);
-    expect(rows.map((row) => row.recipientId).sort()).toEqual([doctorId, patientId].sort());
-    for (const row of rows) {
-      expect(row.channel).toBe('email');
+    const emailRows = rows.filter((row) => row.channel === 'email');
+    expect(emailRows).toHaveLength(2);
+    expect(emailRows.map((row) => row.recipientId).sort()).toEqual([doctorId, patientId].sort());
+    for (const row of emailRows) {
+      expect(row.type).toBe('booking_confirmation');
+      expect(row.status).toBe('queued');
+    }
+  });
+
+  it('also queues one calendar-sync row each for the patient and the doctor', async () => {
+    const doctorId = await createBookableDoctor();
+    const patientId = await createPatient(database);
+    const hold = await appointmentService.holdSlot(database, patientId, doctorId, SLOT_START);
+
+    const appointment = await appointmentService.confirmHold(
+      database,
+      patientId,
+      hold.id,
+      'A checkup.',
+    );
+
+    const rows = await database.db
+      .select()
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.appointmentId, appointment.id));
+    const calendarRows = rows.filter((row) => row.channel === 'calendar');
+    expect(calendarRows).toHaveLength(2);
+    expect(calendarRows.map((row) => row.recipientId).sort()).toEqual([doctorId, patientId].sort());
+    for (const row of calendarRows) {
       expect(row.type).toBe('booking_confirmation');
       expect(row.status).toBe('queued');
     }
@@ -436,9 +461,34 @@ describe('cancelAppointmentByRequester', () => {
       .select()
       .from(notificationOutbox)
       .where(eq(notificationOutbox.appointmentId, appointmentId));
-    const cancellations = rows.filter((row) => row.type === 'cancellation');
+    const cancellations = rows.filter(
+      (row) => row.type === 'cancellation' && row.channel === 'email',
+    );
     expect(cancellations).toHaveLength(2);
     expect(cancellations.map((row) => row.recipientId).sort()).toEqual(
+      [doctorId, patientId].sort(),
+    );
+  });
+
+  it('also queues a calendar-delete row for both patient and doctor', async () => {
+    const { doctorId, patientId, appointmentId } = await bookOne();
+
+    await appointmentService.cancelAppointmentByRequester(
+      database,
+      { id: patientId, role: 'patient' },
+      appointmentId,
+      undefined,
+    );
+
+    const rows = await database.db
+      .select()
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.appointmentId, appointmentId));
+    const calendarDeletes = rows.filter(
+      (row) => row.type === 'cancellation' && row.channel === 'calendar',
+    );
+    expect(calendarDeletes).toHaveLength(2);
+    expect(calendarDeletes.map((row) => row.recipientId).sort()).toEqual(
       [doctorId, patientId].sort(),
     );
   });

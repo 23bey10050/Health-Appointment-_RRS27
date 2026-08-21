@@ -114,4 +114,55 @@ describe('loadConfig', () => {
     expect(groqOnly.ai.geminiApiKey).toBeUndefined();
     expect(both.ai.geminiApiKey).toBe('a-gemini-key');
   });
+
+  const REAL_GOOGLE_ENV = {
+    GOOGLE_CLIENT_ID: 'id.apps.googleusercontent.com',
+    GOOGLE_CLIENT_SECRET: 'a-secret',
+    GOOGLE_REDIRECT_URI: 'http://localhost:4000/auth/google/callback',
+    GOOGLE_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+  };
+
+  it('runs with no Google account configured - booking and cancelling simply create no calendar event', () => {
+    const config = loadConfig(MINIMUM_ENV);
+
+    expect(config.google.clientId).toBeUndefined();
+    expect(config.google.tokenEncryptionKey).toBeUndefined();
+  });
+
+  it('accepts all four Google values set together', () => {
+    const config = loadConfig({ ...MINIMUM_ENV, ...REAL_GOOGLE_ENV });
+
+    expect(config.google.clientId).toBe(REAL_GOOGLE_ENV.GOOGLE_CLIENT_ID);
+    expect(config.google.tokenEncryptionKey).toBe(REAL_GOOGLE_ENV.GOOGLE_TOKEN_ENCRYPTION_KEY);
+  });
+
+  it('refuses a Google client id with none of the other three set', () => {
+    let caught: ConfigError | undefined;
+
+    try {
+      loadConfig({ ...MINIMUM_ENV, GOOGLE_CLIENT_ID: REAL_GOOGLE_ENV.GOOGLE_CLIENT_ID });
+    } catch (error) {
+      caught = error as ConfigError;
+    }
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    expect(caught?.problems.join(' ')).toContain('GOOGLE_CLIENT_ID');
+  });
+
+  it('refuses a token encryption key that does not decode to exactly 32 bytes', () => {
+    let caught: ConfigError | undefined;
+
+    try {
+      loadConfig({
+        ...MINIMUM_ENV,
+        ...REAL_GOOGLE_ENV,
+        GOOGLE_TOKEN_ENCRYPTION_KEY: Buffer.alloc(16, 7).toString('base64'),
+      });
+    } catch (error) {
+      caught = error as ConfigError;
+    }
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    expect(caught?.problems.join(' ')).toContain('32 bytes');
+  });
 });

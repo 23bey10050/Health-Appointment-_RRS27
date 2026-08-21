@@ -2,7 +2,9 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from '../../../src/db/client.js';
-import { notificationOutbox } from '../../../src/db/schema.js';
+import { appointments, notificationOutbox } from '../../../src/db/schema.js';
+import { saveGoogleEventId } from '../../../src/modules/calendar/repository.js';
+import type { CalendarEventDetails, CalendarSync } from '../../../src/modules/calendar/sync.js';
 import type { EmailMessage, EmailSender } from '../../../src/shared/email.js';
 import { queueNotification } from '../../../src/shared/outbox.js';
 import { drainOutboxOnce } from '../../../src/modules/notifications/worker.js';
@@ -45,6 +47,53 @@ function silentLogger() {
   return { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 }
 
+/** None of these tests queue a 'calendar' channel row, so this never actually gets called - it
+ *  only needs to exist to satisfy `drainOutboxOnce`'s signature. */
+function unusedCalendarSync(): CalendarSync {
+  return {
+    upsertEvent: () => Promise.resolve(undefined),
+    deleteEvent: () => Promise.resolve(),
+  };
+}
+
+interface FakeCalendarSync {
+  calendarSync: CalendarSync;
+  upsertCalls: { userId: string; event: CalendarEventDetails }[];
+  deleteCalls: { userId: string; eventId: string }[];
+}
+
+function fakeCalendarSync(
+  behavior: {
+    /** false simulates a recipient who has never connected Google - upsertEvent resolves to
+     *  undefined, exactly like the real GoogleCalendarSync does for that case. Defaults to true,
+     *  since most tests here care about the connected path. */
+    connected?: boolean;
+    eventId?: string;
+    upsertError?: Error;
+  } = {},
+): FakeCalendarSync {
+  const connected = behavior.connected ?? true;
+  const upsertCalls: { userId: string; event: CalendarEventDetails }[] = [];
+  const deleteCalls: { userId: string; eventId: string }[] = [];
+  return {
+    calendarSync: {
+      upsertEvent: (userId, event) => {
+        upsertCalls.push({ userId, event });
+        if (behavior.upsertError) {
+          return Promise.reject(behavior.upsertError);
+        }
+        return Promise.resolve(connected ? (behavior.eventId ?? 'fake-google-event-id') : undefined);
+      },
+      deleteEvent: (userId, eventId) => {
+        deleteCalls.push({ userId, eventId });
+        return Promise.resolve();
+      },
+    },
+    upsertCalls,
+    deleteCalls,
+  };
+}
+
 async function bookedAppointment(): Promise<{
   appointmentId: string;
   doctorId: string;
@@ -72,7 +121,7 @@ describe('drainOutboxOnce', () => {
     });
     const { sender, sent } = fakeSender();
 
-    const result = await drainOutboxOnce(database, sender, silentLogger());
+    const result = await drainOutboxOnce(database, sender, unusedCalendarSync(), silentLogger());
 
     expect(result.processed).toBe(1);
     expect(sent).toHaveLength(1);
@@ -92,7 +141,7 @@ describe('drainOutboxOnce', () => {
     });
     const { sender, sent } = fakeSender();
 
-    await drainOutboxOnce(database, sender, silentLogger());
+    await drainOutboxOnce(database, sender, unusedCalendarSync(), silentLogger());
 
     // The doctor's own copy talks about the patient, not about "your appointment".
     expect(sent[0]?.subject).toMatch(/New appointment/);
@@ -120,7 +169,7 @@ describe('drainOutboxOnce', () => {
     });
     const { sender, sent } = fakeSender();
 
-    const result = await drainOutboxOnce(database, sender, silentLogger());
+    const result = await drainOutboxOnce(database, sender, unusedCalendarSync(), silentLogger());
 
     expect(result.processed).toBe(2);
     // Only the good row actually produced an email.
@@ -133,7 +182,7 @@ describe('drainOutboxOnce', () => {
   it('does nothing, quietly, when there is nothing due', async () => {
     const { sender, sent } = fakeSender();
 
-    const result = await drainOutboxOnce(database, sender, silentLogger());
+    const result = await drainOutboxOnce(database, sender, unusedCalendarSync(), silentLogger());
 
     expect(result.processed).toBe(0);
     expect(sent).toHaveLength(0);
@@ -152,7 +201,7 @@ describe('drainOutboxOnce', () => {
       send: () => Promise.reject(new Error('Brevo is down')),
     };
 
-    await expect(drainOutboxOnce(database, failingSender, silentLogger())).resolves.toEqual({
+    await expect(drainOutboxOnce(database, failingSender, unusedCalendarSync(), silentLogger())).resolves.toEqual({
       processed: 1,
     });
 
@@ -173,7 +222,7 @@ describe('drainOutboxOnce', () => {
     });
     const { sender, sent } = fakeSender();
 
-    await drainOutboxOnce(database, sender, silentLogger());
+    await drainOutboxOnce(database, sender, unusedCalendarSync(), silentLogger());
 
     expect(sent).toHaveLength(0);
     const [row] = await database.db
@@ -182,5 +231,105 @@ describe('drainOutboxOnce', () => {
       .where(eq(notificationOutbox.recipientId, someoneElse));
     expect(row?.status).toBe('failed');
     expect(row?.lastError).toMatch(/neither the doctor nor the patient/);
+  });
+});
+
+describe('drainOutboxOnce - calendar channel', () => {
+  it('creates an event and records the returned id on the appointment', async () => {
+    const { appointmentId, patientId } = await bookedAppointment();
+    await queueNotification(database.db, {
+      appointmentId,
+      recipientId: patientId,
+      channel: 'calendar',
+      type: 'booking_confirmation',
+      payload: { appointmentId },
+    });
+    const { calendarSync, upsertCalls } = fakeCalendarSync({ eventId: 'a-real-event-id' });
+
+    const result = await drainOutboxOnce(database, fakeSender().sender, calendarSync, silentLogger());
+
+    expect(result.processed).toBe(1);
+    expect(upsertCalls).toHaveLength(1);
+    expect(upsertCalls[0]?.userId).toBe(patientId);
+    const [row] = await database.db.select().from(notificationOutbox);
+    expect(row?.status).toBe('sent');
+    const [appointment] = await database.db.select().from(appointments).where(eq(appointments.id, appointmentId));
+    expect(appointment?.googleEventIdPatient).toBe('a-real-event-id');
+  });
+
+  it("a recipient who has not connected Google produces no event, and still counts as sent - not an error", async () => {
+    const { appointmentId, doctorId } = await bookedAppointment();
+    await queueNotification(database.db, {
+      appointmentId,
+      recipientId: doctorId,
+      channel: 'calendar',
+      type: 'booking_confirmation',
+      payload: { appointmentId },
+    });
+    const { calendarSync } = fakeCalendarSync({ connected: false });
+
+    await drainOutboxOnce(database, fakeSender().sender, calendarSync, silentLogger());
+
+    const [row] = await database.db.select().from(notificationOutbox);
+    expect(row?.status).toBe('sent');
+    const [appointment] = await database.db.select().from(appointments).where(eq(appointments.id, appointmentId));
+    expect(appointment?.googleEventIdDoctor).toBeNull();
+  });
+
+  it('deletes the event on cancellation using the id recorded when it was created', async () => {
+    const { appointmentId, patientId } = await bookedAppointment();
+    await saveGoogleEventId(database, appointmentId, 'patient', 'the-existing-event-id');
+    await queueNotification(database.db, {
+      appointmentId,
+      recipientId: patientId,
+      channel: 'calendar',
+      type: 'cancellation',
+      payload: { appointmentId },
+    });
+    const { calendarSync, deleteCalls } = fakeCalendarSync();
+
+    await drainOutboxOnce(database, fakeSender().sender, calendarSync, silentLogger());
+
+    expect(deleteCalls).toEqual([{ userId: patientId, eventId: 'the-existing-event-id' }]);
+    const [row] = await database.db.select().from(notificationOutbox);
+    expect(row?.status).toBe('sent');
+  });
+
+  it('does nothing on cancellation when that side never had an event created', async () => {
+    const { appointmentId, patientId } = await bookedAppointment();
+    await queueNotification(database.db, {
+      appointmentId,
+      recipientId: patientId,
+      channel: 'calendar',
+      type: 'cancellation',
+      payload: { appointmentId },
+    });
+    const { calendarSync, deleteCalls } = fakeCalendarSync();
+
+    await drainOutboxOnce(database, fakeSender().sender, calendarSync, silentLogger());
+
+    expect(deleteCalls).toHaveLength(0);
+    const [row] = await database.db.select().from(notificationOutbox);
+    expect(row?.status).toBe('sent');
+  });
+
+  it('a revoked Google connection fails the row cleanly, with the real reason recorded, like any other failure', async () => {
+    const { appointmentId, patientId } = await bookedAppointment();
+    await queueNotification(database.db, {
+      appointmentId,
+      recipientId: patientId,
+      channel: 'calendar',
+      type: 'booking_confirmation',
+      payload: { appointmentId },
+    });
+    const { calendarSync } = fakeCalendarSync({
+      upsertError: new Error('Google Calendar access has been revoked or has expired. Reconnect to restore it.'),
+    });
+
+    await drainOutboxOnce(database, fakeSender().sender, calendarSync, silentLogger());
+
+    const [row] = await database.db.select().from(notificationOutbox);
+    expect(row?.status).toBe('failed');
+    expect(row?.lastError).toMatch(/revoked or has expired/);
   });
 });

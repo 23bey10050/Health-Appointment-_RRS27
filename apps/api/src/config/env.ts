@@ -67,11 +67,47 @@ const envSchema = z
     // summary - a normal, fully supported way to run this project without signing up for anything.
     GROQ_API_KEY: z.string().min(1).optional(),
     GEMINI_API_KEY: z.string().min(1).optional(),
+
+    // All four optional together, same shape again: with none of these set, booking and
+    // cancelling an appointment simply create no calendar event for anyone, which is a normal,
+    // fully supported way to run this project. Once set, they are required as a group - there is
+    // no useful partial configuration, since an OAuth client is meaningless without its secret and
+    // redirect URI, and stored tokens are meaningless without a key to decrypt them.
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    GOOGLE_REDIRECT_URI: z.string().url().optional(),
+    // Must decode from base64 to exactly 32 bytes - AES-256-GCM's key length, not a stylistic
+    // choice. Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+    GOOGLE_TOKEN_ENCRYPTION_KEY: z
+      .string()
+      .min(1)
+      .refine((value) => Buffer.from(value, 'base64').length === 32, {
+        message: 'must decode from base64 to exactly 32 bytes',
+      })
+      .optional(),
   })
   .refine((env) => !env.BREVO_API_KEY || env.BREVO_SENDER_EMAIL, {
     message: 'is required once BREVO_API_KEY is set, so Brevo has a "from" address to send with',
     path: ['BREVO_SENDER_EMAIL'],
-  });
+  })
+  .refine(
+    (env) => {
+      const google = [
+        env.GOOGLE_CLIENT_ID,
+        env.GOOGLE_CLIENT_SECRET,
+        env.GOOGLE_REDIRECT_URI,
+        env.GOOGLE_TOKEN_ENCRYPTION_KEY,
+      ];
+      const configured = google.filter((value) => value !== undefined).length;
+      return configured === 0 || configured === google.length;
+    },
+    {
+      message:
+        'GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI and GOOGLE_TOKEN_ENCRYPTION_KEY ' +
+        'must all be set together, or all left blank',
+      path: ['GOOGLE_CLIENT_ID'],
+    },
+  );
 
 type RawEnv = z.infer<typeof envSchema>;
 
@@ -113,6 +149,14 @@ export interface AppConfig {
     /** Undefined means "no account configured" — that provider is simply left out of the chain. */
     readonly groqApiKey: string | undefined;
     readonly geminiApiKey: string | undefined;
+  };
+  readonly google: {
+    /** Either all four of these are set, or none are — enforced above at parse time, so nothing
+     *  downstream has to handle a partially configured Google connection. */
+    readonly clientId: string | undefined;
+    readonly clientSecret: string | undefined;
+    readonly redirectUri: string | undefined;
+    readonly tokenEncryptionKey: string | undefined;
   };
 }
 
@@ -178,6 +222,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     ai: Object.freeze({
       groqApiKey: env.GROQ_API_KEY,
       geminiApiKey: env.GEMINI_API_KEY,
+    }),
+    google: Object.freeze({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      redirectUri: env.GOOGLE_REDIRECT_URI,
+      tokenEncryptionKey: env.GOOGLE_TOKEN_ENCRYPTION_KEY,
     }),
   });
 }

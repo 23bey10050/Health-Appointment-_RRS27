@@ -1,5 +1,6 @@
 import type { AppConfig } from '../config/env.js';
 import type { Database } from '../db/client.js';
+import { buildCalendarSync } from '../modules/calendar/sync.js';
 import { drainOutboxOnce } from '../modules/notifications/worker.js';
 import { queueDueReminders } from '../modules/notifications/reminders.js';
 import { BrevoEmailSender } from '../providers/brevo.js';
@@ -30,16 +31,19 @@ export function buildEmailSender(config: AppConfig, logger: Logger): EmailSender
  */
 export function startBackgroundJobs(
   database: Database,
+  config: AppConfig,
   sender: EmailSender,
   logger: Logger,
 ): RunningScheduler {
+  const calendarSync = buildCalendarSync(database, config);
+
   return startScheduler(
     [
       {
         name: 'outbox-drain',
         intervalMs: OUTBOX_DRAIN_INTERVAL_MS,
         run: async () => {
-          await drainOutboxOnce(database, sender, logger);
+          await drainOutboxOnce(database, sender, calendarSync, logger);
         },
       },
       {

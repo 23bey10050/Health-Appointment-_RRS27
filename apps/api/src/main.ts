@@ -15,7 +15,7 @@ async function start(): Promise<void> {
   // Kept separate from buildServer on purpose — a test that builds a server with inject() should
   // never also start a live 20-second interval touching the real outbox table underneath it.
   const emailSender = buildEmailSender(config, app.log);
-  const scheduler = startBackgroundJobs(db, emailSender, app.log);
+  const scheduler = startBackgroundJobs(db, config, emailSender, app.log);
 
   // Hosting platforms send SIGTERM and then kill the process a short while later. Requests already
   // in flight get that window to finish, and the timeout is our promise to leave regardless.

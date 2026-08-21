@@ -27,6 +27,10 @@ export interface RenderContext {
   slot: TimeRange;
   /** Only meaningful once the appointment is actually cancelled; `null` otherwise. */
   cancellationReason: string | null;
+  /** Set once a calendar-channel create has actually succeeded for that side - `null` until then,
+   *  and what a later cancellation looks up to know what to delete. */
+  googleEventIdPatient: string | null;
+  googleEventIdDoctor: string | null;
 }
 
 const doctorUser = alias(users, 'doctor_user_for_render');
@@ -50,6 +54,8 @@ export async function loadRenderContext(
       patientTimezone: patientUser.timezone,
       slot: appointments.slot,
       cancellationReason: appointments.cancellationReason,
+      googleEventIdPatient: appointments.googleEventIdPatient,
+      googleEventIdDoctor: appointments.googleEventIdDoctor,
     })
     .from(appointments)
     .innerJoin(doctorUser, eq(doctorUser.id, appointments.doctorId))

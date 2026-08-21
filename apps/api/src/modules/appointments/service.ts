@@ -171,6 +171,28 @@ export async function confirmHold(
       dedupeKey: `booking_confirmation:${created.id}:${hold.doctorId}`,
     });
 
+    // The same event, once for each side's own calendar - a `calendar:` prefix on the dedupe key
+    // keeps these from colliding with the two email rows above, which would otherwise share the
+    // exact same `type:appointmentId:recipientId` string. Whether either one actually produces a
+    // real event depends entirely on whether that person has connected Google Calendar - the
+    // worker decides that, not this transaction, which queues the same promise-to-sync either way.
+    await queueNotification(tx, {
+      appointmentId: created.id,
+      recipientId: patientId,
+      channel: 'calendar',
+      type: 'booking_confirmation',
+      payload: { appointmentId: created.id },
+      dedupeKey: `calendar:booking_confirmation:${created.id}:${patientId}`,
+    });
+    await queueNotification(tx, {
+      appointmentId: created.id,
+      recipientId: hold.doctorId,
+      channel: 'calendar',
+      type: 'booking_confirmation',
+      payload: { appointmentId: created.id },
+      dedupeKey: `calendar:booking_confirmation:${created.id}:${hold.doctorId}`,
+    });
+
     return created.id;
   });
 
@@ -264,6 +286,26 @@ export async function cancelAppointmentByRequester(
       type: 'cancellation',
       payload: { appointmentId },
       dedupeKey: `cancellation:${appointmentId}:${appointment.doctorId}`,
+    });
+
+    // Deleting each side's own calendar event, same reasoning as the calendar rows in
+    // confirmHold above - the worker looks up whichever event id was actually recorded, if any,
+    // and simply has nothing to do for a side that never had one created in the first place.
+    await queueNotification(tx, {
+      appointmentId,
+      recipientId: appointment.patientId,
+      channel: 'calendar',
+      type: 'cancellation',
+      payload: { appointmentId },
+      dedupeKey: `calendar:cancellation:${appointmentId}:${appointment.patientId}`,
+    });
+    await queueNotification(tx, {
+      appointmentId,
+      recipientId: appointment.doctorId,
+      channel: 'calendar',
+      type: 'cancellation',
+      payload: { appointmentId },
+      dedupeKey: `calendar:cancellation:${appointmentId}:${appointment.doctorId}`,
     });
 
     return appointmentId;
