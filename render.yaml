@@ -26,7 +26,10 @@ services:
     # every single deploy - safe to run repeatedly, since Phase 1's migrator only ever applies what
     # has not already run. Both steps call the compiled output directly with plain `node`, not
     # `tsx`, so the start command has no dependency on anything that only lives in devDependencies.
-    startCommand: node dist/cli/migrate.js && node dist/main.js
+    # Paths are relative to the repo root, the same as buildCommand above - Render runs every
+    # command from there, not from apps/api, since rootDir is deliberately left unset (see the
+    # comment on buildCommand).
+    startCommand: node apps/api/dist/cli/migrate.js && node apps/api/dist/main.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -66,8 +69,12 @@ services:
         sync: false
       - key: BREVO_SENDER_EMAIL
         sync: false
+      # Not a secret, just a display name, so it gets a real default here rather than a blank
+      # `sync: false` prompt - a field left blank in Render's dashboard can end up as an empty
+      # string rather than a truly absent variable, and this one has no `.optional()` in the
+      # app's own config schema to tolerate that.
       - key: BREVO_SENDER_NAME
-        sync: false
+        value: Health Appointment Clinic
 
       # --- AI summaries (optional) --- leave unset and both pre-visit and post-visit summaries
       # fall back to a plain, honest template message instead of an AI-written one.
