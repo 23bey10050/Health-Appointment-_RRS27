@@ -1,0 +1,29 @@
+# Render's own exclusion list, separate from .gitignore.
+#
+# The build succeeds and genuinely produces apps/api/dist, but the deploy still crashed on
+# "Cannot find module apps/api/dist/cli/migrate.js" - dist/ is (correctly) gitignored, since
+# compiled output has no business being committed, but Render's own build-to-deploy handoff
+# reads that same .gitignore to decide what survives into the running instance, and silently
+# drops anything it matches, freshly built or not. This file is that same list minus dist/ -
+# the one thing here that both belongs out of git and has to reach the running server.
+
+node_modules/
+coverage/
+*.tsbuildinfo
+
+.env
+.env.*
+!.env.local
+
+*.md
+
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
