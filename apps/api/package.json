@@ -7,7 +7,7 @@
   "main": "./dist/main.js",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
-    "build": "tsc --build",
+    "build": "tsc --build tsconfig.build.json && node ../../scripts/copy-migrations.mjs",
     "clean": "tsc --build --clean",
     "start": "node --env-file-if-exists=../../.env dist/main.js",
     "test": "vitest run",

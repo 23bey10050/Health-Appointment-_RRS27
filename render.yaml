@@ -21,6 +21,9 @@ services:
     # @health/api. --include=dev is explicit rather than assumed, since a NODE_ENV=production
     # environment variable present during the build would otherwise make a bare `npm install` skip
     # the devDependencies tsc itself lives in.
+    #
+    # Both workspace build scripts emit real output and copy the .sql migrations across - see the
+    # note on @health/api's own "build" script for why that was not always true.
     buildCommand: npm install --include=dev && npm run build --workspace @health/contracts && npm run build --workspace @health/api
     # Migrations run immediately before the server starts, against the real deployed database,
     # every single deploy - safe to run repeatedly, since Phase 1's migrator only ever applies what
