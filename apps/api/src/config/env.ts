@@ -194,6 +194,20 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     ]);
   }
 
+  // An empty CORS_ORIGINS parses cleanly to an empty list, which `server.ts` then reads as
+  // "allow no origin at all". Locally that is harmless - nothing is calling across origins. In
+  // production it is the worst kind of failure: /health and /ready both answer perfectly, the
+  // database is fine, the logs are clean, and every single browser request is silently blocked
+  // with no CORS header and no server-side trace of why. Refusing to boot turns a confusing
+  // afternoon into one honest line in the deploy log.
+  if (env.NODE_ENV === 'production' && env.CORS_ORIGINS.length === 0) {
+    throw new ConfigError([
+      'CORS_ORIGINS: empty in production, which would block every browser request. ' +
+        'Set it to the exact origin the browser app is served from, ' +
+        'for example https://your-app.workers.dev (comma-separate more than one).',
+    ]);
+  }
+
   return Object.freeze({
     nodeEnv: env.NODE_ENV,
     isProduction: env.NODE_ENV === 'production',

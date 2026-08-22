@@ -67,6 +67,21 @@ describe('loadConfig', () => {
     ).not.toThrow();
   });
 
+  it('refuses to boot in production with an empty CORS list, rather than silently blocking every browser', () => {
+    expect(() =>
+      loadConfig({
+        ...MINIMUM_ENV,
+        NODE_ENV: 'production',
+        JWT_ACCESS_SECRET: 'a-real-looking-secret-that-is-long-enough-to-pass',
+        CORS_ORIGINS: '',
+      }),
+    ).toThrow(/CORS_ORIGINS/);
+  });
+
+  it('allows an empty CORS list outside production, where nothing is calling across origins', () => {
+    expect(() => loadConfig({ ...MINIMUM_ENV, CORS_ORIGINS: '' })).not.toThrow();
+  });
+
   it('runs with no Brevo account configured at all - the console sender takes over', () => {
     const config = loadConfig(MINIMUM_ENV);
 
