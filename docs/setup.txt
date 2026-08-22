@@ -558,7 +558,7 @@ FREE HOSTED SERVICES
 
 None of these are required to build or demo the project locally - a missing
 key means a local stand-in takes over rather than a crash, for every one of
-them. The last three (Render, Cloudflare Pages, cron-job.org) are for an
+them. The last three (Render, Cloudflare Workers, cron-job.org) are for an
 actual production deploy; see DEPLOYING TO PRODUCTION below for the exact
 order to set them up in. Every service listed is free and none of them ask
 for a credit card.
@@ -585,7 +585,7 @@ for a credit card.
       application. Billing does NOT need to be enabled for the Calendar API.
 
   Render (API hosting)     https://render.com
-  Cloudflare Pages (web)   https://pages.cloudflare.com
+  Cloudflare Workers (web) https://workers.cloudflare.com
   cron-job.org (keep warm) https://cron-job.org
 
 -------------------------------------------------------------------------------
@@ -615,32 +615,47 @@ the previous one produced.
      CORS_ORIGINS is also prompted for here but does not have a real answer
      yet - leave it as the placeholder in .env.local (http://localhost:5173)
      for this first deploy. Step 4 below comes back and fixes it once the
-     Cloudflare Pages URL actually exists.
+     Cloudflare Workers URL actually exists.
 
      Once deployed, note this service's URL (something like
      https://health-appointment-api.onrender.com) - the browser app needs it
      next.
 
-  3. Web app - Cloudflare Pages (https://pages.cloudflare.com)
+  3. Web app - Cloudflare Workers (https://workers.cloudflare.com)
 
-     Create a project from this same repo, with these exact settings:
+     Cloudflare now puts new projects through Workers rather than the older
+     Pages flow - the giveaway on the setup screen is a deploy command of
+     "npx wrangler deploy". That command reads wrangler.jsonc at the repo
+     root, which is already committed and needs no editing.
 
-       Root directory:    / (the repo root, not apps/web - this is an npm
-                           workspaces monorepo, and npm install has to run
-                           at the root for @health/contracts to resolve)
+     Import this repo, then set:
+
        Build command:     npm install && npm run build --workspace @health/contracts
                            && npm run build --workspace @health/web
-       Build output dir:  apps/web/dist
+       Deploy command:    npx wrangler deploy        (the default - leave it)
+       Root directory:    /   (the repo root, not apps/web - this is an npm
+                           workspaces monorepo, and npm install has to run
+                           at the root for @health/contracts to resolve)
 
-     Environment variables (Production and Preview both):
+     There is no "build output directory" field in this flow. wrangler.jsonc
+     already points at apps/web/dist, and sets not_found_handling to
+     single-page-application so React Router owns every path - without that,
+     opening /admin/doctors directly, or refreshing anywhere but the root,
+     would 404 before React ever loaded.
+
+     Build environment variable (this one matters):
 
        VITE_API_URL = the Render URL from step 2
 
+     Vite inlines that value into the bundle at BUILD time, so it has to be
+     set as a build variable, not a runtime one - a runtime Worker variable
+     would never reach browser code that was already compiled without it.
+
      Deploy, then note this project's own URL (something like
-     https://health-appointment.pages.dev).
+     https://health-appointment--rrs27.workers.dev).
 
   4. Close the loop: go back to the Render service from step 2 and set
-     CORS_ORIGINS to the Cloudflare Pages URL from step 3 (comma-separate
+     CORS_ORIGINS to the Cloudflare Workers URL from step 3 (comma-separate
      more than one origin if you also keep a custom domain). Save - Render
      redeploys automatically. The two services now trust each other.
 
@@ -655,7 +670,7 @@ the previous one produced.
      about whether the database itself is reachable (that is what /ready is
      for, and this ping deliberately does not use it).
 
-  6. Confirm the whole thing for real: open the Cloudflare Pages URL, sign in
+  6. Confirm the whole thing for real: open the Cloudflare Workers URL, sign in
      with a seeded demo account (see DEMO LOGINS above - re-run
      `npm run db:seed` against the Neon database first if it is empty), and
      walk through a real booking. Every endpoint documented throughout this

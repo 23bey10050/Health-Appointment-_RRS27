@@ -1,0 +1,22 @@
+{
+  // Cloudflare Workers config for the browser app. `npx wrangler deploy` reads this file from the
+  // repo root, which is why it lives here rather than in apps/web - Cloudflare's own build runs
+  // from the root directory anyway, since npm workspaces needs `npm install` to happen there for
+  // @health/contracts to resolve.
+  //
+  // The API is not deployed from here. It runs on Render, from render.yaml, as a separate service.
+  "name": "health-appointment--rrs27",
+  "compatibility_date": "2026-08-22",
+
+  // No "main" key on purpose: this is a static single-page app with no server-side Worker code of
+  // its own. Every dynamic thing it does is a fetch to the Render API.
+  "assets": {
+    "directory": "./apps/web/dist/",
+
+    // React Router owns every path below "/" on the client. Without this, a visitor opening
+    // /admin/doctors directly - or refreshing anywhere that is not the root - would get a 404 from
+    // Cloudflare before React ever loaded, because no file named "admin/doctors" exists in the
+    // build output. This serves index.html for those instead and lets the router take over.
+    "not_found_handling": "single-page-application",
+  },
+}
