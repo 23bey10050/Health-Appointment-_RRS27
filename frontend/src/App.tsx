@@ -1,4 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import Landing from "@/pages/Landing";
+import FAQ from "@/pages/FAQ";
+import { BlogIndex, BlogPost } from "@/pages/Blog";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Settings from "@/pages/Settings";
@@ -20,8 +23,16 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      {/* Public */}
+      <Route path="/" element={<Landing />} />
+      <Route path="/faq" element={<FAQ />} />
+      <Route path="/blog" element={<BlogIndex />} />
+      <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/register" element={<Register />} />
+      {/* /login keeps working on its own -- ProtectedRoute redirects there, and
+          old links/bookmarks still resolve. /login/:role only changes framing. */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/login/:role" element={<Login />} />
 
       <Route
         path="/settings"
@@ -32,6 +43,7 @@ export default function App() {
         }
       />
 
+      {/* Patient */}
       <Route
         path="/patient"
         element={
@@ -65,6 +77,7 @@ export default function App() {
         }
       />
 
+      {/* Doctor */}
       <Route
         path="/doctor"
         element={
@@ -98,6 +111,7 @@ export default function App() {
         }
       />
 
+      {/* Admin */}
       <Route
         path="/admin"
         element={
@@ -139,8 +153,8 @@ export default function App() {
         }
       />
 
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* Unknown paths land on the public site, not a dead end. */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
