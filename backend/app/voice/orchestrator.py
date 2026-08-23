@@ -223,6 +223,16 @@ class VoiceOrchestrator:
             await self._handle_emergency(hit, text)
             return
 
+        # "Goodbye" must always work. The model was observed ignoring an explicit
+        # "please end the session" three turns running and offering a booking
+        # instead, so ending is detected here rather than relying on it to call
+        # the end_session tool.
+        if self._wants_to_end(text) and self._emergency_hit is None:
+            self.conversation.append({"speaker": "patient", "text": text})
+            await self._speak_precomputed("Thanks for calling City Care Clinic. Take care, goodbye.")
+            await self.handle_session_end(reason="user_said_goodbye")
+            return
+
         # Ambulance need is a dispatch decision, so it is captured deterministically
         # here rather than trusting the model to remember a record_symptom_data
         # call -- same reasoning as SAFETY-1: anything a responder acts on must not
@@ -265,7 +275,28 @@ class VoiceOrchestrator:
         self.turn_index += 1
 
         await self._speak(guarded_text)
+
+        # Close only after the farewell has been spoken. Never mid-emergency:
+        # the line stays open there until the patient or a clinician ends it.
+        if self.collected_data.get("end_session_requested") and self._emergency_hit is None:
+            await self.handle_session_end(reason=str(self.collected_data["end_session_requested"]))
+            return
+
         self.state = SessionState.listening
+
+    # Explicit closings only. Deliberately does not include bare "thanks" or
+    # "ok" -- those appear constantly mid-conversation and hanging up on them
+    # would be worse than not hanging up at all.
+    _END_PHRASES = (
+        "end the session", "end session", "end the call", "end call",
+        "goodbye", "good bye", "bye bye", "that is all", "thats all",
+        "that's all", "nothing else", "i am done", "im done", "i'm done",
+        "we are done", "hang up", "stop the session", "close the session",
+    )
+
+    def _wants_to_end(self, text: str) -> bool:
+        normalized = f" {text.lower().strip().rstrip('.!?')} "
+        return any(p in normalized for p in self._END_PHRASES) or normalized.strip() == "bye"
 
     async def _capture_ambulance_answer(self, text: str) -> None:
         """Record a yes/no ambulance answer straight onto the emergency case.
@@ -376,17 +407,44 @@ class VoiceOrchestrator:
 
         return (
             "=== TRIAGE: ROUTINE ===\n"
-            "Before booking, gather enough detail for the doctor to prepare. Ask ONE question per turn, "
-            "and ask at least three about the problem itself: what the main symptom is, when it started "
-            "and how it has changed, and anything that makes it better or worse (plus current medications "
-            "or allergies if relevant).\n"
-            "Then ask their full name and phone number, and whether they have a preferred doctor or "
-            "specialisation and a preferred day/time." + contact_ask + "\n"
+            + self._intake_phase_instruction()
+            + "\nAsk at most ONE question per turn, and never re-ask something already answered above.\n"
             "Do NOT call a tool just to record or acknowledge an answer -- the whole conversation is "
             "already saved for the doctor, and every tool call adds several seconds of silence before "
             "the patient hears you. Speak your question directly. Use tools only to actually do "
-            "something: record_symptom_data for the name/phone/preferred doctor once you have them, "
-            "then search_doctors / check_availability / hold_slot / confirm_booking to book."
+            "something: record_symptom_data for the name/phone once you have them, then "
+            "search_doctors / check_availability / book_appointment to book."
+        )
+
+    # Enough history for the doctor to prepare, without interrogating the patient.
+    MAX_INTAKE_QUESTIONS = 3
+
+    def _intake_phase_instruction(self) -> str:
+        """Move intake -> booking on a turn count, not on the model's judgement.
+
+        Observed failure this prevents: told to "ask at least three questions
+        about the problem", the model fixated on one unanswered question
+        ("severity out of ten") and re-asked it on every turn, ignoring "book the
+        first available slot", "confirm it please" and even "end the session".
+        It made zero tool calls and booked nothing. Counting turns here means the
+        conversation always advances even when the model would not let it.
+        """
+        # No -1 here: the greeting is spoken via _speak_precomputed and never
+        # enters self.conversation, so every agent entry is a real question.
+        asked = sum(1 for t in self.conversation if t["speaker"] == "agent")
+        if asked < self.MAX_INTAKE_QUESTIONS:
+            remaining = self.MAX_INTAKE_QUESTIONS - asked
+            return (
+                f"PHASE: gathering history ({remaining} more question(s), then book).\n"
+                "Ask about the main symptom, when it started and how it has changed, and anything "
+                "that makes it better or worse. If the patient has already told you something, do "
+                "not ask it again -- move to the next gap."
+            )
+        return (
+            "PHASE: BOOK NOW. You have gathered enough history -- stop asking about symptoms.\n"
+            "Proceed to booking now: search_doctors, then check_availability, then "
+            "book_appointment. Only tell the patient it is booked AFTER book_appointment "
+            "returns ok -- never announce a booking you have not actually made."
         )
 
     async def _run_agent(self, patient_text: str) -> tuple[str, list[dict]]:
@@ -403,7 +461,7 @@ class VoiceOrchestrator:
             result = await run_agent_turn(ctx, system_prompt=system_prompt, conversation=self.conversation)
             self.collected_data.update(ctx.collected_data)
             for call in result.tool_calls:
-                if call["tool"] == "confirm_booking" and call["result"].get("ok"):
+                if call["tool"] == "book_appointment" and call["result"].get("ok"):
                     self.collected_data["booked_appointment_id"] = call["result"].get("appointment_id")
                     await self.transport.send_json(
                         {"type": "booking_confirmed", "appointment_id": call["result"]["appointment_id"], "payload": call["result"]}

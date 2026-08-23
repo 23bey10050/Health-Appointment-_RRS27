@@ -219,7 +219,10 @@ export function useVoiceSocket(opts: UseVoiceSocketOptions) {
             });
             break;
           case "session_summary":
-            patch({ sessionOutcome: msg.outcome as string });
+            // The server has closed the session (the agent called end_session, or
+            // the user hung up). Reflect that in the UI rather than sitting in
+            // "listening" against a session that no longer exists.
+            patch({ sessionOutcome: msg.outcome as string, agentState: "closed" });
             break;
           default:
             break;

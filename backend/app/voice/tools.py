@@ -60,14 +60,13 @@ TOOL_DEFINITIONS: list[dict] = [
         "args": {"doctor_id": "string", "date_from": "YYYY-MM-DD", "date_to": "YYYY-MM-DD"},
     },
     {
-        "name": "hold_slot",
-        "description": "Place a 5-minute hold on a specific doctor+time. Call as soon as the patient's intent to book that slot is clear.",
-        "args": {"doctor_id": "string", "start_at": "ISO 8601 datetime"},
-    },
-    {
-        "name": "confirm_booking",
-        "description": "Confirm a previously held slot. Only call after the patient has explicitly confirmed. Idempotent.",
-        "args": {"appointment_id": "string"},
+        "name": "book_appointment",
+        "description": (
+            "Book a confirmed appointment in one step. Use this to book -- it holds and confirms "
+            "together, so the appointment is immediately real and will appear in the patient's "
+            "appointments list. Only call it once the patient has agreed to a specific slot."
+        ),
+        "args": {"doctor_id": "string", "start_at": "ISO datetime string"},
     },
     {
         "name": "cancel_appointment",
@@ -114,6 +113,14 @@ TOOL_DEFINITIONS: list[dict] = [
         "args": {"city": "string, optional", "has_emergency_dept": "boolean, optional"},
     },
     {
+        "name": "end_session",
+        "description": (
+            "End the voice session when the patient says they are done, says goodbye, or asks to "
+            "stop. Say a short farewell in the same turn. Never call this during an active emergency."
+        ),
+        "args": {"reason": "string, optional -- e.g. 'user_said_goodbye'"},
+    },
+    {
         "name": "transfer_to_human",
         "description": "Create a callback request and hand off to clinic staff.",
         "args": {"reason": "string"},
@@ -134,6 +141,38 @@ logger = structlog.get_logger(__name__)
 
 def _err(reason: str) -> dict:
     return {"ok": False, "reason": reason}
+
+
+async def _resolve_doctor_id(ctx: ToolContext, value: str) -> uuid.UUID | None:
+    """Accept a real UUID or a doctor's name.
+
+    Language models are unreliable at copying a UUID back out of a previous tool
+    result -- observed live: `book_appointment(doctor_id="doc_anjali_mehta")`,
+    a plausible-looking identifier the model invented, which raised
+    ValueError("badly formed hexadecimal UUID string") and killed the booking.
+    Names are what the model actually has in context, so accept them and resolve
+    here instead of failing.
+    """
+    try:
+        return uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        pass
+
+    # "Dr. Anjali Mehta", "anjali mehta", "doc_anjali_mehta" -> match on surname/name parts.
+    cleaned = value.replace("_", " ").replace("-", " ").strip()
+    for prefix in ("dr ", "dr. ", "doc ", "doctor "):
+        if cleaned.lower().startswith(prefix):
+            cleaned = cleaned[len(prefix):]
+            break
+    if not cleaned:
+        return None
+
+    return await ctx.session.scalar(
+        select(User.id)
+        .join(DoctorProfile, DoctorProfile.user_id == User.id)
+        .where(User.full_name.ilike(f"%{cleaned}%"))
+        .limit(1)
+    )
 
 
 async def search_doctors(ctx: ToolContext, *, specialisation: str, hospital_id: str | None = None, accepts_emergency: bool | None = None) -> dict:
@@ -166,9 +205,12 @@ async def search_doctors(ctx: ToolContext, *, specialisation: str, hospital_id: 
 
 
 async def check_availability(ctx: ToolContext, *, doctor_id: str, date_from: str, date_to: str) -> dict:
+    resolved = await _resolve_doctor_id(ctx, doctor_id)
+    if resolved is None:
+        return _err(f"Unknown doctor '{doctor_id}'. Use a doctor_id or full name from search_doctors.")
     try:
         slots = await compute_availability(
-            ctx.session, uuid.UUID(doctor_id), date.fromisoformat(date_from), date.fromisoformat(date_to)
+            ctx.session, resolved, date.fromisoformat(date_from), date.fromisoformat(date_to)
         )
     except ValueError as e:
         return _err(f"Invalid date: {e}")
@@ -196,6 +238,47 @@ async def confirm_booking_tool(ctx: ToolContext, *, appointment_id: str) -> dict
     except AppError as e:
         return _err(e.message)
     return {"ok": True, "appointment_id": str(appt.id), "status": appt.status.value, "start_at": appt.start_at.isoformat()}
+
+
+async def book_appointment(ctx: ToolContext, *, doctor_id: str, start_at: str) -> dict:
+    """Hold and confirm in one call -- the booking tool the voice agent should use.
+
+    hold_slot/confirm_booking are two steps for the *web* UI, where the patient
+    picks a slot, sees a countdown, and then commits. In a voice conversation the
+    patient has already said yes out loud, so splitting it across two LLM tool
+    calls only creates a failure mode: observed in testing, the agent called
+    hold_slot, announced "I have successfully booked your appointment", and never
+    called confirm_booking -- leaving a `held` row that silently expired minutes
+    later, so the patient saw nothing in their appointments list.
+
+    Both steps still go through the same services as the web path, so the
+    advisory lock and the double-booking exclusion constraint apply unchanged.
+    """
+    if ctx.patient_id is None:
+        return _err("No patient is attached to this session yet.")
+    resolved = await _resolve_doctor_id(ctx, doctor_id)
+    if resolved is None:
+        return _err(f"Unknown doctor '{doctor_id}'. Call search_doctors first and use a doctor_id or full name from its result.")
+    doctor = await ctx.session.get(DoctorProfile, resolved)
+    if doctor is None:
+        return _err("Unknown doctor.")
+    try:
+        held = await hold_slot(
+            ctx.session, resolved, ctx.patient_id,
+            datetime.fromisoformat(start_at), doctor.slot_duration_min,
+        )
+        appt = await confirm_booking(ctx.session, held.id, ctx.patient_id)
+    except AppError as e:
+        return _err(e.message)
+
+    doctor_user = await ctx.session.get(User, resolved)
+    return {
+        "ok": True,
+        "appointment_id": str(appt.id),
+        "status": appt.status.value,
+        "start_at": appt.start_at.isoformat(),
+        "doctor_name": doctor_user.full_name if doctor_user else "",
+    }
 
 
 async def cancel_appointment_tool(ctx: ToolContext, *, appointment_id: str, reason: str | None = None) -> dict:
@@ -432,6 +515,14 @@ async def list_hospitals(ctx: ToolContext, *, city: str | None = None, has_emerg
     return {"ok": True, "hospitals": [{"id": str(h.id), "name": h.name, "city": h.city, "has_emergency_dept": h.has_emergency_dept} for h in rows]}
 
 
+async def end_session(ctx: ToolContext, *, reason: str = "user_said_goodbye") -> dict:
+    """Flag the session for closing. The orchestrator performs the actual close
+    after the farewell has been spoken -- tearing the WebSocket down here would
+    cut off the agent mid-sentence."""
+    ctx.collected_data["end_session_requested"] = reason
+    return {"ok": True, "message": "Session will end after this reply."}
+
+
 async def transfer_to_human(ctx: ToolContext, *, reason: str) -> dict:
     ctx.collected_data["transfer_requested"] = reason
     return {"ok": True, "message": "A callback request has been created."}
@@ -440,8 +531,6 @@ async def transfer_to_human(ctx: ToolContext, *, reason: str) -> dict:
 TOOL_HANDLERS: dict[str, Callable[..., Awaitable[dict]]] = {
     "search_doctors": search_doctors,
     "check_availability": check_availability,
-    "hold_slot": hold_slot_tool,
-    "confirm_booking": confirm_booking_tool,
     "cancel_appointment": cancel_appointment_tool,
     "reschedule_appointment": reschedule_appointment_tool,
     "get_patient_context": get_patient_context,
@@ -449,6 +538,8 @@ TOOL_HANDLERS: dict[str, Callable[..., Awaitable[dict]]] = {
     "lookup_clinic_info": lookup_clinic_info,
     "escalate_emergency": escalate_emergency,
     "book_emergency_appointment": book_emergency_appointment,
+    "book_appointment": book_appointment,
+    "end_session": end_session,
     "list_hospitals": list_hospitals,
     "transfer_to_human": transfer_to_human,
 }
