@@ -72,7 +72,7 @@ pie title "Voice Agent Success Rate"
 ### Projected Impact vs Traditional Booking
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#3b82f6', 'secondaryColor': '#ef4444'}}}%%
+%%{init: { 'theme': 'base', 'themeVariables': { 'background': 'transparent', 'primaryColor': '#3b82f6', 'secondaryColor': '#ef4444', 'textColor': '#cbd5e1', 'lineColor': '#475569' }, 'xyChart': { 'plotColorPalette': '#3b82f6,#ef4444', 'backgroundColor': 'transparent' } } }%%
 xychart-beta
     title "Appointments Handled per Month: AI vs Manual"
     x-axis ["Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6"]
