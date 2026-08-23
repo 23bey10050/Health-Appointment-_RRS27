@@ -16,7 +16,7 @@
 
 <br/>
 
-## 🌟 About the Project
+## About the Project
 
 City Care Clinic is a web application that helps manage doctor appointments and patient follow-ups. Instead of making patients wait on hold to talk to a receptionist, the app uses a real-time AI voice assistant. This agent can talk to patients, listen to their symptoms, book their visits, and immediately warn a doctor if there is a medical emergency. 
 
@@ -24,7 +24,7 @@ We built the interface using a modern "Glassmorphism" style. This makes the dash
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 > **Note:** Replace the placeholder URLs below with your actual images or GIFs.
 
@@ -55,7 +55,7 @@ We built the interface using a modern "Glassmorphism" style. This makes the dash
 
 ---
 
-## 📈 AI Accuracy & Impact
+## AI Accuracy & Impact
 
 When using good AI models (like GPT-4 or Gemini) and paid speech-to-text tools, the voice agent works very well. This saves a lot of time for clinic staff and helps handle patient emergencies much faster.
 
@@ -84,7 +84,7 @@ xychart-beta
 
 ---
 
-## 🔄 How the System Works
+## How the System Works
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eff6ff', 'primaryTextColor': '#1e293b', 'primaryBorderColor': '#3b82f6', 'lineColor': '#64748b'}}}%%
@@ -107,7 +107,7 @@ graph TD
 
 ---
 
-## 🛠 What We Used
+## What We Used
 
 - **Frontend:** React 18, Vite, Tailwind CSS, Lucide React, and HTML5 Canvas (for the voice animation).
 - **Backend:** Python 3.11, FastAPI, SQLAlchemy, and Celery (for background tasks).
@@ -117,7 +117,7 @@ graph TD
 
 ---
 
-## 🚀 How to Run It Locally
+## How to Run It Locally
 
 Running the project on your own computer is easy because we use Docker.
 
@@ -150,11 +150,11 @@ Running the project on your own computer is easy because we use Docker.
 
 ---
 
-## 🌍 How to Deploy to Production
+## How to Deploy to Production
 
 When you are ready to put this on the internet, you should separate the frontend and backend. 
 
-> ⚠️ **IMPORTANT SECURITY NOTE:** 
+> **Important Security Note:** 
 > - Never hardcode your API Keys, passwords, or Database URLs in the code.
 > - Always use the safe environment variables setup provided by your hosting service.
 > - Make sure CORS is set up to only allow your official frontend domain.
