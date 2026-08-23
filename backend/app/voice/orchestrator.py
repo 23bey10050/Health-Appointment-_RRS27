@@ -2,20 +2,19 @@
 
     IDLE --session_start--> GREETING --> LISTENING
     LISTENING --speech_end--> TRANSCRIBING
-    TRANSCRIBING --[red flag]--> EMERGENCY  (terminal for routine flow)
+    TRANSCRIBING --[red flag]--> EMERGENCY --> LISTENING (conversation continues)
                  --> THINKING
     THINKING --> (RAG || LLM) --> TOOL_CALLING? --> SPEAKING
     SPEAKING --audio_end--> LISTENING
              --barge_in--> (abort TTS, flush buffer) --> LISTENING
     ANY --session_end--> CLOSING --> persist turns, metrics, trigger summary
 
-One instance per session. `transport` is a thin Protocol (send_json/send_bytes)
-so this is testable without a live WebSocket -- api/v1/voice_ws.py adapts a real
-`WebSocket`; tests adapt an in-memory recorder.
+One instance per session. `transport` is a thin Protocol so this is testable
+without a live WebSocket: voice_ws.py adapts a real one, tests adapt a recorder.
 
-SAFETY-1 lives in _handle_utterance: the red-flag matcher (safety/red_flags.py)
-runs and is checked *before* any LLM-derived response is spoken, on every
-finalized segment, independent of whether the LLM call even succeeds.
+SAFETY-1 lives in _handle_utterance -- the red-flag matcher runs on every
+finalized segment before any LLM response is spoken, and does not depend on the
+LLM call succeeding.
 """
 
 import asyncio
@@ -205,18 +204,16 @@ class VoiceOrchestrator:
         stage_latency["red_flag"] = red_flag_ms
 
         # Three-tier triage (safety/red_flags.py::_classify_tier):
-        #   CRITICAL -> escalate now, on this utterance, before any LLM call.
-        #   URGENT   -> concerning but not clearly acute (e.g. "chest pain once a
-        #               day for months"). No banner: hand the agent a directive to
-        #               ask focused acuity questions. The matcher re-runs on every
-        #               subsequent turn, so an answer revealing acuity ("it's
-        #               crushing right now") still escalates immediately.
-        #   ROUTINE  -> no hit; normal booking/intake flow.
-        # Latched, not derived from self.state: the intake turns that follow an
-        # escalation legitimately cycle state through speaking -> listening, so
-        # reading self.state here would look "not escalated" on the very next turn
-        # and replay the whole emergency script (the rolling utterance window
-        # still contains the original red-flag phrase, so match() keeps hitting).
+        #   CRITICAL -> escalate now, before any LLM call.
+        #   URGENT   -> concerning but not clearly acute ("chest pain once a day
+        #               for months"). No banner; the agent asks acuity questions
+        #               instead. The matcher re-runs every turn, so an answer that
+        #               reveals acuity still escalates.
+        #   ROUTINE  -> no hit; normal booking flow.
+        #
+        # Latched rather than read from self.state, because state cycles back to
+        # listening during the intake turns after an escalation -- reading it here
+        # would look "not escalated" and replay the emergency script every turn.
         already_escalated = self._emergency_hit is not None
         self.triage_tier = hit.tier if hit is not None else TIER_ROUTINE
         if hit is not None and hit.tier == TIER_CRITICAL and not already_escalated:

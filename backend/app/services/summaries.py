@@ -103,12 +103,10 @@ async def generate_pre_visit_summary(session: AsyncSession, redis: Redis, appoin
         known_values=known_values,
     )
 
-    # Patient context was previously passed as "" -- so for any appointment booked
-    # through the web UI (no voice transcript) the model received nothing at all
-    # and dutifully returned a summary with every field blank, which the doctor
-    # portal then rendered as an empty panel. Allergies, chronic conditions,
-    # current medications and the stated booking reason are useful to a preparing
-    # clinician even with no transcript, so they go in here.
+    # This was previously passed as "", so appointments booked through the web UI
+    # (no voice transcript) gave the model nothing and produced a blank summary.
+    # Allergies, chronic conditions, medications and the booking reason are all
+    # useful to a preparing clinician even without a transcript.
     profile = await session.get(PatientProfile, appointment.patient_id)
     context_parts: list[str] = []
     if appointment.reason_text:

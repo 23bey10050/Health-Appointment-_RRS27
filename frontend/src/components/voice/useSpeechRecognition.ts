@@ -1,16 +1,12 @@
 import { useEffect, useRef } from "react";
 
-/** Browser Web Speech API STT.
+/** Browser Web Speech API STT, replacing the old AudioWorklet -> PCM16 ->
+ * faster-whisper pipeline. The browser handles capture and transcription and we
+ * send only text, which removed ~500MB of model weights from the server image.
  *
- * Replaces the previous pipeline (AudioWorklet -> PCM16 -> WebSocket ->
- * faster-whisper). The browser does capture, endpointing and transcription, and
- * we ship only the resulting text. That removed ~500MB of model weights from the
- * server image, at the cost of Chrome/Edge-only support -- Firefox has no
- * implementation and Safari's is unreliable, so `supported` is surfaced to the
- * caller and the typed input stays first-class.
- *
- * Note the audio goes to the browser vendor's speech service (Google, for
- * Chrome). The consent screen states this.
+ * The cost is Chrome/Edge-only support, so `supported` is surfaced to the caller
+ * and typed input stays first-class. Audio also goes to the browser vendor's
+ * speech service (Google, on Chrome) -- the consent screen states this.
  */
 
 // Not in TypeScript's DOM lib yet.

@@ -53,27 +53,17 @@ class Settings(BaseSettings):
 
     # RAG
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
-    # IMPLEMENTATION.md section 8.2 specifies bge-reranker-v2-m3; fastembed (our
-    # chosen CPU/ONNX runtime, section 8.2's own pick for "no GPU") doesn't carry
-    # that model. bge-reranker-base (the same BAAI lineage, natively supported) was
-    # the first substitute tried, but measured at ~10s for 20 candidates on this
-    # CPU -- a 278M-param XLM-RoBERTa cross-encoder built for cross-lingual rerank,
-    # which our English-only clinic KB doesn't need. ms-marco-MiniLM-L-6-v2 is the
-    # standard fast English cross-encoder for exactly this job and is what section
-    # 8.4's "p50 retrieval under 100ms" target actually requires.
+    # Section 8.2 specifies bge-reranker-v2-m3, which fastembed doesn't carry.
+    # bge-reranker-base was tried first and measured ~10s for 20 candidates on
+    # CPU -- it's a cross-lingual model, and this KB is English-only.
+    # ms-marco-MiniLM is the fast English cross-encoder for this job.
     RERANKER_MODEL: str = "Xenova/ms-marco-MiniLM-L-6-v2"
     RERANK_SCORE_GAP_THRESHOLD: float = 0.05
 
-    # Retrieve clinic/triage context on EVERY voice turn, versus only when the
-    # agent asks for it via the lookup_clinic_info tool.
-    #
-    # Default off, and that is a latency decision backed by measurement: each
-    # utterance is a distinct query so the Redis cache never hits, making this a
-    # ~1.1s CPU-bound embedding on a fast machine and several seconds on a
-    # constrained instance -- paid on every turn, including the many turns that
-    # are pure symptom-gathering or slot-picking and need no knowledge base at
-    # all. The agent still reaches the full KB through lookup_clinic_info when a
-    # question actually calls for it.
+    # Retrieve clinic context on every voice turn, versus only when the agent
+    # asks via lookup_clinic_info. Off by default for latency: every utterance is
+    # a distinct query so the cache never hits, costing ~1.1s of CPU-bound
+    # embedding per turn -- including the many turns that need no KB at all.
     VOICE_RAG_PER_TURN: bool = False
 
     # Email

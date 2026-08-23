@@ -16,20 +16,13 @@ logger = structlog.get_logger(__name__)
 
 SAFE_FALLBACK_LINE = "I'm not able to advise on that -- your doctor will go through it with you at the visit."
 
-# SAFETY-2 blocks the agent *asserting* a diagnosis. It must not block the agent
-# asking about symptoms or reflecting them back -- that is the core of a triage
-# conversation, and over-blocking is not "safe": it replaces a good question with
-# a dead-end refusal, derails the booking, and teaches patients to ignore the
-# assistant. Two patterns below were doing exactly that and are now tightened:
+# SAFETY-2: block the agent *asserting* a diagnosis, not asking about symptoms.
+# Over-blocking is not the safe option -- it replaces a good question with a
+# dead-end refusal and derails the booking.
 #
-#   "you are experiencing"  -- fired on "What symptoms are you experiencing?" and
-#       on normal reflection ("So you're experiencing chest pain once a day").
-#       Now requires a certainty adverb, which is what makes it an assertion.
-#       "suffering from" stays unconditional: that phrasing always implies a
-#       named condition.
-#   "(this|that) is"        -- fired on ordinary sentences like "that is booked"
-#       and "that is confirmed". Now requires a certainty adverb too, so
-#       "This is likely appendicitis" still blocks but "that is booked" passes.
+# Two patterns needed a certainty adverb added, because without one they fired on
+# ordinary speech: "you are experiencing" matched "What symptoms are you
+# experiencing?", and "(this|that) is" matched "that is booked".
 DIAGNOSTIC_PATTERNS: list[re.Pattern] = [
     re.compile(r"\byou\s+have\b", re.I),
     re.compile(r"\byou(?:'re| are)\s+suffering from\b", re.I),
@@ -67,16 +60,15 @@ _QUESTION_OPENER = re.compile(
 def _is_question(sentence: str) -> bool:
     """A question is not an assertion, and only assertions can be a diagnosis.
 
-    Without this the guard blocks the agent for doing its job: "Do you have any
-    other symptoms?" tripped `you have`, and "What symptoms are you experiencing?"
-    tripped the experiencing pattern. Both were observed live, and each one
-    replaced a good clarifying question with a dead-end refusal.
+    Without this the guard blocked the agent for doing its job -- "Do you have any
+    other symptoms?" tripped `you have`, and each block replaced a clarifying
+    question with a dead-end refusal.
 
-    Trade-off, stated plainly: a diagnosis smuggled into question form ("Did you
-    know you have diabetes?") now passes the regex layer. That is a much rarer
-    failure than the constant false positives this prevents, and it is not the
-    only control -- the system prompt forbids diagnosing, and no AI-generated
-    clinical content reaches a patient without clinician approval (SAFETY-3).
+    The trade-off: a diagnosis phrased as a question ("Did you know you have
+    diabetes?") now gets past the regex layer. That is far rarer than the false
+    positives this prevents, and it isn't the only control -- the system prompt
+    forbids diagnosing, and no AI clinical content reaches a patient without
+    clinician approval (SAFETY-3).
     """
     stripped = sentence.strip()
     return stripped.endswith("?") or bool(_QUESTION_OPENER.match(stripped))

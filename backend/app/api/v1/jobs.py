@@ -1,20 +1,17 @@
 """HTTP triggers for the scheduled jobs.
 
-Why this exists: Render's free tier offers Web Services only -- no Background
-Workers and no Cron Jobs -- so `celery worker` and `celery beat` have nowhere to
-run. Rather than rewrite the jobs, each one is exposed here and driven by an
-external scheduler (a GitHub Actions cron workflow; see deploy/README). That
-also keeps the free-tier service warm, which matters because it otherwise spins
-down after 15 minutes idle and cold-starts in ~50s.
+Render's free tier has no Background Workers or Cron Jobs, so `celery worker` and
+`celery beat` have nowhere to run. Each job is exposed here instead and driven by
+a GitHub Actions cron workflow (see deploy/README). That doubles as a keep-alive:
+the free tier otherwise spins down after 15 minutes and cold-starts in ~50s.
 
-These call the same underlying async functions the Celery tasks wrap, so there is
-exactly one implementation of each job. celery_app.py and the task wrappers are
-left intact: moving to a paid Background Worker later needs no code change, just
-stop calling these endpoints.
+These call the same async functions the Celery tasks wrap, so each job has one
+implementation. The task wrappers are left intact, so moving to a paid worker
+later needs no code change -- just stop calling these endpoints.
 
-Auth is a shared secret in `X-Jobs-Secret`, compared with `secrets.compare_digest`.
-Deliberately not the normal JWT/role dependency: the caller is a cron runner, not
-a logged-in user, and it should not need an account.
+Auth is a shared secret in `X-Jobs-Secret` compared with `secrets.compare_digest`,
+not the usual JWT dependency: the caller is a cron runner, not a user with an
+account.
 """
 
 import secrets

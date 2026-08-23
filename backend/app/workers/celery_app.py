@@ -53,12 +53,10 @@ celery_app.conf.update(
     },
 )
 
-# Explicit imports, not autodiscover_tasks: that only scans each listed package for a
-# `tasks.py` submodule, and this package deliberately uses one file per concern
-# (holds.py, reminders.py, email_dispatch.py, ...) per IMPLEMENTATION.md section 5.
-# Each import runs that module's @celery_app.task decorators, registering the task.
-# Safe despite these modules importing `celery_app` back from here: this line only
-# runs after `celery_app` above is fully constructed, so the circular import resolves.
+# Explicit imports rather than autodiscover_tasks, which only looks for a
+# `tasks.py` per package -- this package uses one file per concern instead.
+# Importing each module runs its @celery_app.task decorators. The circular import
+# is safe because this runs after celery_app above is fully constructed.
 from app.workers import (  # noqa: E402,F401
     audio_retention,
     calendar_jobs,

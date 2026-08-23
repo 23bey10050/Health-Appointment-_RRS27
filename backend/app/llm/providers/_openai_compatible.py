@@ -34,12 +34,10 @@ class OpenAICompatibleProvider:
             raise LLMProviderError("no API key configured", retryable=False)
 
         if json_mode:
-            # Groq (and OpenAI-compatible APIs generally) reject
-            # response_format={"type": "json_object"} with a 400 unless the
-            # literal word "json" appears somewhere in messages -- caller prompt
-            # templates (llm/prompts/*.md) are written for the schema, not for
-            # this provider-specific wire requirement, so it's enforced here
-            # once rather than threaded through every template.
+            # Groq and other OpenAI-compatible APIs return a 400 for
+            # response_format=json_object unless the word "json" appears in the
+            # messages. Handled here so the prompt templates don't each have to
+            # carry a provider-specific requirement.
             messages = [*messages, {"role": "system", "content": "Respond with valid JSON only."}]
 
         payload = {

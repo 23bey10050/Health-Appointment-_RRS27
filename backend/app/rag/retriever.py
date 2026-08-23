@@ -112,12 +112,10 @@ async def _hybrid_search(
         )
     ).all()
     return [
-        # float(), not the raw column value: Postgres returns SUM(1.0/...) as
-        # NUMERIC, which asyncpg maps to Decimal. The dataclass annotation says
-        # float but dataclasses don't coerce, so the Decimal survived all the way
-        # to the Redis cache write and blew up json.dumps ("Object of type Decimal
-        # is not JSON serializable") -- silently killing every retrieval that
-        # missed cache, including the voice agent's and the emergency brief's.
+        # float() is required: Postgres returns SUM(1.0/...) as NUMERIC, which
+        # asyncpg maps to Decimal, and dataclasses don't coerce it. The Decimal
+        # reached the Redis cache write and broke json.dumps, silently killing
+        # every retrieval that missed cache.
         RetrievedChunk(
             id=r.id, document_id=r.document_id, content=r.content,
             heading_path=r.heading_path, score=float(r.rrf_score),
@@ -152,13 +150,11 @@ async def retrieve(
 
     pool = await _hybrid_search(session, query, namespaces=namespaces, audience=audience, patient_id=patient_id)
 
-    # RRF scores are inherently tiny and scale with 1/RRF_K (top rank in both arms
-    # tops out around 2/(RRF_K+1) =~ 0.033 here) -- an *absolute* gap of 0.05 would
-    # exceed the entire possible score range and trigger on every query, which
-    # defeats the point of the check (measured: p50 latency 3.3s with reranking
-    # firing ~100% of the time instead of the intended ~30%, section 8.3). Compare
-    # the gap *relative* to the top score instead, so the threshold means the same
-    # thing ("top two are within 5% of each other") regardless of RRF_K.
+    # The gap is compared relative to the top score, not as an absolute value.
+    # RRF scores scale with 1/RRF_K and top out around 0.033 here, so an absolute
+    # threshold of 0.05 exceeds the whole score range and fires on every query
+    # (measured: reranking ran ~100% of the time, p50 latency 3.3s). Relative
+    # means the same thing at any RRF_K: "top two are within 5% of each other".
     if len(pool) >= 2 and pool[0].score > 0 and (pool[0].score - pool[1].score) / pool[0].score < settings.RERANK_SCORE_GAP_THRESHOLD:
         scores = await asyncio.to_thread(rerank, query, [c.content for c in pool])
         pool = [c for c, _ in sorted(zip(pool, scores), key=lambda pair: pair[1], reverse=True)]

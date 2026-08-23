@@ -42,10 +42,9 @@ class ToolContext:
 
 
 # ---------------------------------------------------------------------------
-# Tool definitions -- names/descriptions/arg schemas embedded in the system
-# prompt as text (voice/agent.py), since prompted JSON tool-calling (section
-# "Agent tools") has to work identically across all four LLM providers, which
-# don't share a native function-calling wire format.
+# Tool definitions. These go into the system prompt as text (voice/agent.py)
+# rather than using native function calling, because the four LLM providers
+# don't share a wire format for it and prompted JSON works on all of them.
 # ---------------------------------------------------------------------------
 
 TOOL_DEFINITIONS: list[dict] = [
@@ -127,12 +126,10 @@ TOOL_DEFINITIONS: list[dict] = [
     },
 ]
 
-# Section 12 says 3. Lowered to 2 for latency: every tool call is a full
-# sequential LLM round-trip (~1-1.7s measured, worse on a small instance), so the
-# ceiling is really "worst-case seconds before the patient hears anything" --
-# 3 allowed up to 4 chained calls and a >6s silence. Two covers the real flows
-# (search_doctors -> check_availability, or hold_slot -> confirm_booking); the
-# agent simply continues on the next turn if it needs more.
+# Section 12 says 3, lowered to 2 for latency. Each tool call is a sequential
+# LLM round-trip (~1-1.7s measured), so this limit sets the worst-case silence
+# before the patient hears anything -- 3 allowed chains of over 6s. Two covers
+# the real flows, and the agent can continue on the next turn if it needs more.
 MAX_TOOL_CALLS_PER_TURN = 2
 
 

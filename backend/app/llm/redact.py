@@ -2,18 +2,15 @@
 "Gemini's free tier may use prompts for training. This is why PHI redaction is
 mandatory before any hosted call, not optional" (section 20, item 7).
 
-Two passes, not one general-purpose NER model:
-  1. Known-value substitution. We're never redacting an arbitrary stranger's free
-     text -- every call site knows exactly whose data this is (the patient on the
-     appointment, the session), so their name/phone/email get exact-matched and
-     replaced. This is more reliable than NER for the values we actually have.
-  2. Pattern-based catch-all (email, Indian mobile, Aadhaar/PAN-shaped numbers) for
-     anything mentioned that isn't already in `known_values` -- a doctor's name the
-     patient volunteers, a relative's phone number, etc.
+Two passes, rather than one general-purpose NER model:
+  1. Known-value substitution. Every call site already knows whose data this is,
+     so the patient's name, phone and email are exact-matched -- more reliable
+     than NER for the values we actually hold.
+  2. Pattern catch-all (email, Indian mobile, Aadhaar/PAN shapes) for anything
+     not in `known_values`, such as a relative's number the patient mentions.
 
-The mapping is pure and returned to the caller rather than persisted here; the
-Redis-backed session mapping (store on redact, rehydrate on the way back) lives in
-redact_for_session/rehydrate_for_session below.
+The mapping is returned to the caller rather than persisted here. The
+Redis-backed session version lives in redact_for_session/rehydrate_for_session.
 """
 
 import json
