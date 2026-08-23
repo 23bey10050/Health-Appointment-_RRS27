@@ -57,10 +57,12 @@ services:
       - key: ONCALL_ALERT_EMAILS
         sync: false
 
+  # No `plan:` key here. Static sites have no paid tiers, so Render rejects the
+  # field outright ("no such plan free for service type web") rather than
+  # ignoring it -- unlike the web service above, where plan: free is required.
   - type: web
     name: clinic-frontend
     runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
