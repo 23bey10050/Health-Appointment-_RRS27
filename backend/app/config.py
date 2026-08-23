@@ -64,6 +64,18 @@ class Settings(BaseSettings):
     RERANKER_MODEL: str = "Xenova/ms-marco-MiniLM-L-6-v2"
     RERANK_SCORE_GAP_THRESHOLD: float = 0.05
 
+    # Retrieve clinic/triage context on EVERY voice turn, versus only when the
+    # agent asks for it via the lookup_clinic_info tool.
+    #
+    # Default off, and that is a latency decision backed by measurement: each
+    # utterance is a distinct query so the Redis cache never hits, making this a
+    # ~1.1s CPU-bound embedding on a fast machine and several seconds on a
+    # constrained instance -- paid on every turn, including the many turns that
+    # are pure symptom-gathering or slot-picking and need no knowledge base at
+    # all. The agent still reaches the full KB through lookup_clinic_info when a
+    # question actually calls for it.
+    VOICE_RAG_PER_TURN: bool = False
+
     # Email
     EMAIL_PROVIDER: str = "smtp"
     BREVO_API_KEY: str = ""

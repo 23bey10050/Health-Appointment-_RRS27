@@ -32,5 +32,9 @@ EXPOSE 8000
 # --proxy-headers is required behind a cloud load balancer: without it
 # request.client.host is the balancer's IP for every request, so the IP-keyed
 # rate limiter in core/rate_limit.py would throttle all users as a single client.
+# --ws-ping-interval/timeout keep the voice WebSocket alive through a cloud load
+# balancer. A turn can legitimately be several seconds of silence while the agent
+# thinks, and an idle-timeout on the proxy would drop the session mid-conversation.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
-     "--proxy-headers", "--forwarded-allow-ips", "*"]
+     "--proxy-headers", "--forwarded-allow-ips", "*", \
+     "--ws-ping-interval", "20", "--ws-ping-timeout", "60"]

@@ -120,7 +120,13 @@ TOOL_DEFINITIONS: list[dict] = [
     },
 ]
 
-MAX_TOOL_CALLS_PER_TURN = 3
+# Section 12 says 3. Lowered to 2 for latency: every tool call is a full
+# sequential LLM round-trip (~1-1.7s measured, worse on a small instance), so the
+# ceiling is really "worst-case seconds before the patient hears anything" --
+# 3 allowed up to 4 chained calls and a >6s silence. Two covers the real flows
+# (search_doctors -> check_availability, or hold_slot -> confirm_booking); the
+# agent simply continues on the next turn if it needs more.
+MAX_TOOL_CALLS_PER_TURN = 2
 
 
 logger = structlog.get_logger(__name__)

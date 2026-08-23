@@ -111,6 +111,8 @@ class VoiceOrchestrator:
         self.triage_tier: str = TIER_ROUTINE
         self._urgent_hit: RedFlagHit | None = None
         self._emergency_hit: RedFlagHit | None = None
+        self._last_rag_ms: int = 0
+        self._last_stt_confidence: float | None = None
         self._pending_turns: list[_Turn] = []
         self.tts_task: asyncio.Task | None = None
         self._closed = False
@@ -241,7 +243,18 @@ class VoiceOrchestrator:
 
         t1 = time.monotonic()
         spoken_text, tool_calls = await self._run_agent(text)
-        stage_latency["llm_ttft"] = int((time.monotonic() - t1) * 1000)
+        stage_latency["agent_total"] = int((time.monotonic() - t1) * 1000)
+        stage_latency["rag"] = self._last_rag_ms
+        stage_latency["tool_calls"] = len(tool_calls)
+        # Surfaced per turn so a slow deployment is diagnosable from the admin
+        # health dashboard instead of by guessing which stage is the bottleneck.
+        logger.info(
+            "voice_turn_latency",
+            session_id=str(self.voice_session_id),
+            agent_ms=stage_latency["agent_total"],
+            rag_ms=stage_latency["rag"],
+            tool_calls=len(tool_calls),
+        )
 
         guarded_text = guard_output(spoken_text, session_id=str(self.voice_session_id))
 
@@ -291,6 +304,12 @@ class VoiceOrchestrator:
         never reach a patient-facing answer. Best-effort: retrieval failing must
         degrade the answer, not break the turn.
         """
+        self._last_rag_ms = 0
+        if not settings.VOICE_RAG_PER_TURN:
+            # Off by default -- see config.VOICE_RAG_PER_TURN. The agent reaches
+            # the knowledge base on demand through the lookup_clinic_info tool.
+            return ""
+        started = time.monotonic()
         try:
             results = await retrieve(
                 session,
@@ -304,6 +323,8 @@ class VoiceOrchestrator:
         except Exception as e:  # noqa: BLE001 -- see docstring
             logger.warning("voice_rag_retrieval_failed", error=str(e))
             return ""
+        finally:
+            self._last_rag_ms = int((time.monotonic() - started) * 1000)
         return "\n\n".join(c.content for c in results)
 
     def _triage_directive(self) -> str:
@@ -347,9 +368,10 @@ class VoiceOrchestrator:
                 "Ask focused questions to establish how acute it is -- for example: is it happening "
                 "right now, how severe out of ten, is it getting worse, and are there any associated "
                 "symptoms (breathlessness, sweating, radiating pain, dizziness).\n"
-                "Ask ONE question per turn. Use record_symptom_data to save each answer. "
-                "After you understand the severity, collect their name and phone number, then help "
-                "them book an appointment with a suitable doctor." + contact_ask
+                "Ask ONE question per turn and just speak it -- do NOT call a tool merely to "
+                "acknowledge or store what the patient said; the full transcript is saved for the "
+                "doctor automatically. After you understand the severity, collect their name and "
+                "phone number, then help them book with a suitable doctor." + contact_ask
             )
 
         return (
@@ -360,8 +382,11 @@ class VoiceOrchestrator:
             "or allergies if relevant).\n"
             "Then ask their full name and phone number, and whether they have a preferred doctor or "
             "specialisation and a preferred day/time." + contact_ask + "\n"
-            "Save every answer with record_symptom_data, then use search_doctors / check_availability / "
-            "hold_slot / confirm_booking to complete the booking."
+            "Do NOT call a tool just to record or acknowledge an answer -- the whole conversation is "
+            "already saved for the doctor, and every tool call adds several seconds of silence before "
+            "the patient hears you. Speak your question directly. Use tools only to actually do "
+            "something: record_symptom_data for the name/phone/preferred doctor once you have them, "
+            "then search_doctors / check_availability / hold_slot / confirm_booking to book."
         )
 
     async def _run_agent(self, patient_text: str) -> tuple[str, list[dict]]:
