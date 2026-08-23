@@ -1,0 +1,88 @@
+# Human-readable explanations of each emergency category, retrievable by the voice
+# agent to explain urgency in plain language. This is reference content for
+# retrieval, not the deterministic matcher -- the matcher's pattern definitions
+# live in safety/red_flags.yaml and run independently of the LLM or this KB.
+
+- category: cardiac_acs
+  plain_explanation: >
+    Chest pain or pressure, especially with radiation to the arm or jaw, sweating, or
+    breathlessness, can be a sign of a heart attack. This needs emergency evaluation
+    immediately, not a scheduled appointment, because the risk increases with time.
+
+- category: stroke_fast
+  plain_explanation: >
+    Sudden facial drooping, arm weakness, or slurred speech can be a stroke. The
+    acronym FAST (Face, Arms, Speech, Time) is used because treatment is most
+    effective within a narrow time window from symptom onset -- this always needs
+    an ambulance, not a routine visit.
+
+- category: respiratory_distress
+  plain_explanation: >
+    Severe difficulty breathing, especially with blue lips, an inability to speak in
+    full sentences, or visible chest retraction, is a medical emergency requiring
+    immediate care.
+
+- category: anaphylaxis
+  plain_explanation: >
+    A severe allergic reaction with swelling of the face or throat, widespread hives,
+    or difficulty breathing after exposure to a known or suspected allergen can be
+    life-threatening within minutes and needs emergency treatment right away.
+
+- category: uncontrolled_bleeding
+  plain_explanation: >
+    Bleeding that won't stop with direct pressure, or bleeding that is heavy and
+    ongoing, needs emergency care -- direct pressure should be applied while help is
+    on the way.
+
+- category: loss_of_consciousness
+  plain_explanation: >
+    Someone who has fainted or lost consciousness, especially if they haven't fully
+    recovered quickly, needs urgent evaluation to rule out a cardiac, neurological,
+    or metabolic cause.
+
+- category: active_seizure
+  plain_explanation: >
+    A seizure that is ongoing, or a first-ever seizure, or a seizure without a known
+    prior seizure history, needs emergency evaluation. A person having a seizure
+    should not be restrained; keep the area around them clear.
+
+- category: suspected_overdose_or_poisoning
+  plain_explanation: >
+    Suspected overdose, whether of medication, another substance, or poisoning, is a
+    time-critical emergency. Poison control and emergency services should be
+    contacted immediately, along with information about what was taken and how much.
+
+- category: obstetric_bleeding
+  plain_explanation: >
+    Vaginal bleeding during pregnancy, particularly if heavy or accompanied by pain,
+    needs urgent obstetric evaluation and should not wait for a routine appointment.
+
+- category: infant_high_fever
+  plain_explanation: >
+    A fever in an infant under 3 months old is treated as a potential emergency
+    regardless of how well the baby otherwise seems, because infection can progress
+    quickly and is hard to assess from appearance alone at that age.
+
+- category: major_trauma
+  plain_explanation: >
+    High-energy injuries -- a fall from height, a road traffic accident, or any
+    injury with visible deformity or inability to move the affected part -- need
+    emergency evaluation, even if the person seems to be coping.
+
+- category: severe_burns
+  plain_explanation: >
+    Burns covering a large area, burns to the face or airway, or burns with
+    blistering over a significant area need emergency care rather than routine
+    treatment.
+
+- category: acute_abdomen
+  plain_explanation: >
+    Severe, sudden abdominal pain, especially with a rigid or extremely tender
+    abdomen, fever, or vomiting, can indicate a surgical emergency and needs urgent
+    evaluation.
+
+- category: self_harm_risk
+  plain_explanation: >
+    If someone expresses thoughts of harming themselves, this is treated with care
+    and urgency, connecting them to a crisis counsellor rather than routine booking.
+    In India, the Tele-MANAS helpline (14416) is available for immediate support.

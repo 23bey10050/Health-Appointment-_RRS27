@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 16px;">Your visit summary</h1>
+<p>Hi {{ patient_name }},</p>
+<p>Here's a summary of your visit with {{ doctor_name }}, reviewed and approved by your doctor.</p>
+
+<p style="margin-top:20px;">{{ what_we_discussed }}</p>
+
+{% if what_the_doctor_found %}
+<h2 style="font-size:15px;color:#1e293b;margin:20px 0 8px;">What the doctor found</h2>
+<p>{{ what_the_doctor_found }}</p>
+{% endif %}
+
+{% if medication_schedule %}
+<h2 style="font-size:15px;color:#1e293b;margin:20px 0 8px;">Your medications</h2>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+{% for m in medication_schedule %}
+  <tr>
+    <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">
+      <strong>{{ m.drug }}</strong> {{ m.dose }} &mdash; {{ m.when }}
+      {% if m.with_food %}({{ m.with_food }}){% endif %}<br>
+      <span style="color:#64748b;font-size:13px;">
+        {% if m.for_how_long %}for {{ m.for_how_long }}. {% endif %}{{ m.why }}
+      </span>
+    </td>
+  </tr>
+{% endfor %}
+</table>
+{% endif %}
+
+{% if things_to_do %}
+<h2 style="font-size:15px;color:#1e293b;margin:20px 0 8px;">Things to do</h2>
+<ul style="padding-left:20px;margin:0;">{% for t in things_to_do %}<li>{{ t }}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if things_to_avoid %}
+<h2 style="font-size:15px;color:#1e293b;margin:20px 0 8px;">Things to avoid</h2>
+<ul style="padding-left:20px;margin:0;">{% for t in things_to_avoid %}<li>{{ t }}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if come_back_if %}
+<h2 style="font-size:15px;color:#b91c1c;margin:20px 0 8px;">Come back if</h2>
+<ul style="padding-left:20px;margin:0;color:#b91c1c;">
+  {% for c in come_back_if %}<li>{{ c }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if next_appointment %}
+<p style="margin-top:20px;"><strong>Next appointment:</strong> {{ next_appointment }}</p>
+{% endif %}
+
+<p style="margin-top:24px;">{{ clinic_name }}</p>
+{% endblock %}

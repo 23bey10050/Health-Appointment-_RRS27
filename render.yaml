@@ -1,0 +1,77 @@
+# Render blueprint. Two services only, both free-tier eligible.
+#
+# Deliberately NO background worker or cron service: Render's free tier offers
+# Web Services and Static Sites only. The Celery worker and beat schedule are
+# replaced by /api/v1/jobs/* endpoints driven by an external cron
+# (.github/workflows/scheduled-jobs.yml). See deploy/README.md.
+#
+# Postgres is NOT defined here either -- it lives on Neon, because Render's own
+# free Postgres expires after 90 days and the app needs pgvector + btree_gist.
+
+services:
+  - type: web
+    name: clinic-api
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    # Migrations do NOT run on boot. On a free instance every cold start would
+    # re-attempt DDL against the shared database; run them once from a shell
+    # instead (see deploy/README.md).
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      # Secrets: set these in the Render dashboard, never in this file.
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JOBS_SECRET
+        generateValue: true
+      - key: CALENDAR_TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Deployment-specific. APP_BASE_URL must be the STATIC SITE's URL (it is
+      # the CORS origin and the OAuth/email link base), not this service's.
+      - key: APP_BASE_URL
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: EMAIL_FROM
+        sync: false
+      - key: ONCALL_ALERT_EMAILS
+        sync: false
+
+  - type: web
+    name: clinic-frontend
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # Vite inlines this at BUILD time (import.meta.env), so it cannot be
+      # changed later without rebuilding. Point it at the API service URL.
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      # SPA fallback: react-router owns the paths, so every unmatched request
+      # must serve index.html or a refresh on /patient/book 404s.
+      - type: rewrite
+        source: /*
+        destination: /index.html

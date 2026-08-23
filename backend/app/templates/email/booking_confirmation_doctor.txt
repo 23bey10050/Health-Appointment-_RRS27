@@ -1,0 +1,9 @@
+Hi {{ doctor_name }},
+
+A new appointment has been booked with {{ patient_name }}:
+
+  {{ start_at | format_dt }}
+
+The pre-visit summary will appear in your portal once it is ready.
+
+{{ clinic_name }}

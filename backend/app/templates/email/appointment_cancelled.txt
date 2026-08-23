@@ -1,0 +1,9 @@
+Hi {{ patient_name }},
+
+Your appointment on {{ start_at | format_dt }} has been cancelled.
+{% if reason %}
+Reason: {{ reason }}
+{% endif %}
+You can book a new appointment any time from your patient portal.
+
+{{ clinic_name }}

@@ -1,0 +1,140 @@
+# Standard clarifying-question sets per presenting complaint, for the voice agent
+# to draw on -- asked conversationally, one at a time, never all at once.
+
+- complaint: cough
+  questions:
+    - How long have you had the cough?
+    - Is it dry, or are you bringing anything up?
+    - Any fever alongside it?
+    - Any shortness of breath, even mild?
+    - Does anything make it better or worse?
+
+- complaint: headache
+  questions:
+    - When did it start, and did it come on suddenly or gradually?
+    - Is this the worst headache you've ever had?
+    - Any fever, neck stiffness, or sensitivity to light with it?
+    - Any weakness, numbness, or trouble speaking alongside it?
+    - Have you had headaches like this before?
+
+- complaint: abdominal pain
+  questions:
+    - Where exactly is the pain?
+    - Did it start suddenly or build up gradually?
+    - Any fever, vomiting, or changes in bowel habits?
+    - Does anything make it better or worse, like eating or movement?
+    - On a scale of 1 to 10, how severe is it right now?
+
+- complaint: fever
+  questions:
+    - How high has the fever been, and for how long?
+    - Any other symptoms alongside it — cough, rash, pain anywhere?
+    - Have you taken anything for it, and did it help?
+    - Any recent travel or known exposure to illness?
+
+- complaint: joint or back pain
+  questions:
+    - Which joint or area, and did it start after an injury?
+    - Is there any swelling, redness, or warmth over the area?
+    - Can you bear weight on it or move it normally?
+    - How long has this been going on?
+
+- complaint: skin concern
+  questions:
+    - Where on the body, and how long has it been there?
+    - Is it itchy, painful, or neither?
+    - Has it changed in size, shape, or colour recently?
+    - Any known allergies or new products you've started using?
+
+- complaint: fatigue
+  questions:
+    - How long have you been feeling this way?
+    - Is it affecting your sleep, appetite, or mood?
+    - Any other symptoms alongside the tiredness?
+    - Any recent major life changes or stress?
+
+- complaint: palpitations
+  questions:
+    - When do you notice it — at rest, with exertion, or randomly?
+    - How long do the episodes last?
+    - Any chest pain, dizziness, or breathlessness with it?
+    - Any history of thyroid problems or high caffeine intake?
+
+- complaint: chest pain
+  questions:
+    - Is the pain happening right now, or has it settled?
+    - Does it spread anywhere, such as your arm, jaw, neck, or back?
+    - Does it come on with exertion, or does it happen at rest too?
+    - Is there any sweating, nausea, or breathlessness with it?
+    - On a scale of one to ten, how bad is it at its worst?
+
+- complaint: breathlessness
+  questions:
+    - Are you breathless right now, or only with activity?
+    - How far can you walk before you have to stop?
+    - Can you lie flat, or do you need to prop yourself up?
+    - Any ankle swelling, chest pain, or cough with it?
+    - Do you have asthma, COPD, or a heart condition already?
+
+- complaint: dizziness
+  questions:
+    - Does the room spin, or do you feel faint and light-headed?
+    - Does it happen when you stand up quickly?
+    - Have you actually blacked out at any point?
+    - Any hearing change or ringing in the ears?
+    - Are you on blood pressure or diabetes medication?
+
+- complaint: mental health
+  questions:
+    - How long have you been feeling this way?
+    - How is it affecting your sleep, appetite, and daily routine?
+    - Is there anything in particular that brought this on?
+    - Have you had any thoughts of harming yourself?
+    - Do you have support around you at the moment?
+
+- complaint: diabetes review
+  questions:
+    - What have your recent sugar readings been like?
+    - Are you taking your medication as prescribed?
+    - Any numbness, tingling, or changes in your vision?
+    - Any wounds or ulcers that are slow to heal?
+    - When did you last have blood tests done?
+
+- complaint: pregnancy
+  questions:
+    - How many weeks along are you?
+    - Is this your first pregnancy?
+    - Any bleeding, fluid loss, or severe abdominal pain?
+    - Have you noticed the baby moving as usual?
+    - Have any complications been flagged so far?
+
+- complaint: medication refill
+  questions:
+    - Which medication and what strength do you need?
+    - When did you last have this reviewed by a doctor?
+    - Have you had any side effects from it?
+    - Has anything changed with your symptoms since you started it?
+
+- complaint: child unwell
+  questions:
+    - How old is your child?
+    - Have you been able to measure their temperature?
+    - Are they drinking, and are their nappies or toilet trips normal?
+    - Are they alert and responsive, or unusually drowsy and floppy?
+    - Any rash, and if so does it fade when you press a glass on it?
+
+- complaint: eye problem
+  questions:
+    - Is your vision affected, and in one eye or both?
+    - Did it come on suddenly or gradually?
+    - Any pain, redness, or discharge?
+    - Any flashes, floaters, or a shadow across your vision?
+    - Do you wear contact lenses?
+
+- complaint: urinary symptoms
+  questions:
+    - Is there burning or pain when you pass urine?
+    - Are you going more often than usual, including at night?
+    - Any blood in the urine?
+    - Any fever, or pain in your back or side?
+    - Have you had urine infections before?

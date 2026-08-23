@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 16px;">Appointment rescheduled</h1>
+<p>Hi {{ patient_name }},</p>
+<p>Your appointment has been moved to:</p>
+<p style="background-color:#eff6ff;border-radius:8px;padding:16px;font-size:16px;font-weight:600;color:#1d4ed8;">
+  {{ new_start_at | format_dt }}
+</p>
+<p>An updated calendar file is attached.</p>
+<p>{{ clinic_name }}</p>
+{% endblock %}

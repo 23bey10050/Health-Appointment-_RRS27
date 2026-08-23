@@ -1,0 +1,7 @@
+Hi {{ patient_name }},
+
+Reminder: you're seeing {{ doctor_name }} soon:
+
+  {{ start_at | format_dt }}
+
+{{ clinic_name }}

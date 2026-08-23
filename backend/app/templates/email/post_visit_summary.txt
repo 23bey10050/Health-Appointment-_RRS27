@@ -1,0 +1,34 @@
+Hi {{ patient_name }},
+
+Here's a summary of your visit with {{ doctor_name }}, reviewed and approved by your doctor.
+
+{{ what_we_discussed }}
+{% if what_the_doctor_found %}
+WHAT THE DOCTOR FOUND
+{{ what_the_doctor_found }}
+{% endif %}
+{% if medication_schedule %}
+YOUR MEDICATIONS
+{% for m in medication_schedule %}
+  - {{ m.drug }} {{ m.dose }} -- {{ m.when }}{% if m.with_food %} ({{ m.with_food }}){% endif %}. {% if m.for_how_long %}For {{ m.for_how_long }}. {% endif %}{{ m.why }}
+{% endfor %}
+{% endif %}
+{% if things_to_do %}
+THINGS TO DO
+{% for t in things_to_do %}  - {{ t }}
+{% endfor %}
+{% endif %}
+{% if things_to_avoid %}
+THINGS TO AVOID
+{% for t in things_to_avoid %}  - {{ t }}
+{% endfor %}
+{% endif %}
+{% if come_back_if %}
+COME BACK IF
+{% for c in come_back_if %}  - {{ c }}
+{% endfor %}
+{% endif %}
+{% if next_appointment %}
+Next appointment: {{ next_appointment }}
+{% endif %}
+{{ clinic_name }}

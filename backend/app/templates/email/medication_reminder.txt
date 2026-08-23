@@ -1,0 +1,9 @@
+Hi {{ patient_name }},
+
+Time for your medication:
+
+  {{ drug_name }}{% if strength %} {{ strength }}{% endif %}
+{% if with_food %}  {{ with_food }}
+{% endif %}{% if instructions %}  {{ instructions }}
+{% endif %}
+{{ clinic_name }}

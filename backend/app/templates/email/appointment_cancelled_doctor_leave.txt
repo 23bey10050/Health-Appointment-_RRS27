@@ -1,0 +1,15 @@
+Hi {{ patient_name }},
+
+Your doctor is unexpectedly unavailable on {{ start_at | format_dt }}, so this appointment has
+been cancelled. We're sorry for the inconvenience.
+{% if alternatives %}
+Alternative times:
+{% for alt in alternatives %}
+  - {{ alt.start_at | format_dt }} -- {{ alt.doctor_name }}
+{% endfor %}
+
+Rebook in one click: {{ app_base_url }}/rebook?token={{ rebook_token }}
+{% else %}
+Please visit your patient portal to choose a new time.
+{% endif %}
+{{ clinic_name }}

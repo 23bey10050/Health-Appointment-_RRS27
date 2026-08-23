@@ -1,0 +1,128 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clinic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinic}
+      POSTGRES_DB: ${POSTGRES_DB:-clinic}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clinic} -d ${POSTGRES_DB:-clinic}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Local SMTP catcher for dev: EMAIL_PROVIDER=smtp / SMTP_HOST=mailpit points here
+  # instead of a real mailbox. Web UI to inspect what was "sent" at :8025.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    build:
+      context: ./backend
+      args:
+        INSTALL_EXTRAS: "[dev,rag]"
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-clinic}:${POSTGRES_PASSWORD:-clinic}@postgres:5432/${POSTGRES_DB:-clinic}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/srv/app
+      - ./backend/scripts:/srv/scripts
+      - ./backend/tests:/srv/tests
+      - ./backend/alembic:/srv/alembic
+      - ./backend/alembic.ini:/srv/alembic.ini
+      - fastembed_cache:/tmp/fastembed_cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  worker:
+    build:
+      context: ./backend
+      args:
+        INSTALL_EXTRAS: "[dev,rag]"
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-clinic}:${POSTGRES_PASSWORD:-clinic}@postgres:5432/${POSTGRES_DB:-clinic}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/app:/srv/app
+      - ./backend/scripts:/srv/scripts
+      - ./backend/alembic.ini:/srv/alembic.ini
+      - fastembed_cache:/tmp/fastembed_cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+
+  beat:
+    build:
+      context: ./backend
+      args:
+        INSTALL_EXTRAS: "[dev,rag]"
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-clinic}:${POSTGRES_PASSWORD:-clinic}@postgres:5432/${POSTGRES_DB:-clinic}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/app:/srv/app
+      - ./backend/scripts:/srv/scripts
+      - ./backend/alembic.ini:/srv/alembic.ini
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app beat --loglevel=info
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${APP_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  pgdata:
+  redisdata:
+  fastembed_cache:

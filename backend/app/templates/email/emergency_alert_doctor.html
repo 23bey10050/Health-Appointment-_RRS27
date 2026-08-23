@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 16px;color:#b91c1c;">Emergency escalation &mdash; {{ category }}</h1>
+<p>Hi {{ doctor_name }},</p>
+<p>The voice agent escalated a patient conversation to you as on-call. An urgent appointment has
+been created at <strong>{{ hospital_name }}</strong>.</p>
+<p style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;color:#7f1d1d;">
+  <strong>Patient:</strong> {{ patient_name }}<br>
+  <strong>Category:</strong> {{ category }}<br>
+  <strong>Summary:</strong> {{ summary }}
+</p>
+<p>Open the patient's record in your portal for the full decision-support brief. This is AI-generated
+decision support, not a diagnosis &mdash; clinical judgment required.</p>
+<p>{{ clinic_name }}</p>
+{% endblock %}
+{% block banner %}
+<tr><td style="background-color:#b91c1c;padding:10px 32px;color:#ffffff;font-size:13px;font-weight:600;">
+  URGENT &mdash; requires immediate attention
+</td></tr>
+{% endblock %}

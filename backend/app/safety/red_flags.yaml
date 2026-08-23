@@ -1,0 +1,209 @@
+# Deterministic red-flag definitions -- IMPLEMENTATION.md section 9.1. Matched by
+# safety/red_flags.py against normalised text (lowercased, punctuation stripped,
+# whitespace collapsed) with scoped negation handling. Optimise for recall: false
+# positives are acceptable, misses are not.
+
+- id: cardiac_acs
+  severity: critical
+  category: cardiac
+  any_of:
+    - "chest pain"
+    - "chest pressure"
+    - "chest tightness"
+    - "chest feels tight"
+    - "chest is tight"
+    - "crushing pain"
+    - "pain in my chest"
+    - "pain in chest"
+    - "seene mein dard"
+    # Indian-English / colloquial phrasings -- "paining" is extremely common in
+    # Indian English and was previously a total miss (matched no phrase at all).
+    - "chest is paining"
+    - "chest paining"
+    - "chest pains"
+    - "chest hurts"
+    - "chest is hurting"
+    - "heaviness in chest"
+    - "heaviness in my chest"
+    - "burning in my chest"
+    - "chest burning"
+  amplifiers:
+    - "left arm"
+    - "jaw"
+    - "sweating"
+    - "short of breath"
+    - "nausea"
+  script_id: emergency_cardiac
+
+- id: stroke_fast
+  severity: critical
+  category: neuro
+  any_of:
+    - "face is drooping"
+    - "cant lift my arm"
+    - "cannot lift my arm"
+    - "slurred speech"
+    - "sudden weakness on one side"
+    - "cant speak properly"
+    - "cannot speak properly"
+    - "vision went suddenly"
+    - "face drooping"
+  script_id: emergency_stroke
+
+- id: respiratory_distress
+  severity: critical
+  category: respiratory
+  any_of:
+    - "cant breathe"
+    - "cannot breathe"
+    - "cant breathe properly"
+    - "struggling to breathe"
+    - "gasping for air"
+    - "lips turning blue"
+    - "cant catch my breath"
+    - "cannot catch my breath"
+    - "severe breathlessness"
+  script_id: emergency_respiratory
+
+- id: anaphylaxis
+  severity: critical
+  category: allergic
+  any_of:
+    - "throat is closing"
+    - "throat closing up"
+    - "face is swelling"
+    - "tongue is swelling"
+    - "allergic reaction and cant breathe"
+    - "severe allergic reaction"
+    - "swelling all over"
+  amplifiers:
+    - "hives"
+    - "just ate"
+    - "bee sting"
+    - "new medication"
+  script_id: emergency_anaphylaxis
+
+- id: uncontrolled_bleeding
+  severity: critical
+  category: trauma
+  any_of:
+    - "bleeding wont stop"
+    - "bleeding will not stop"
+    - "heavy bleeding"
+    - "blood everywhere"
+    - "cant stop the bleeding"
+    - "cannot stop the bleeding"
+  script_id: emergency_bleeding
+
+- id: loss_of_consciousness
+  severity: critical
+  category: neuro
+  any_of:
+    - "passed out"
+    - "fainted"
+    - "lost consciousness"
+    - "not waking up"
+    - "unresponsive"
+    - "wont wake up"
+    - "will not wake up"
+  script_id: emergency_unconscious
+
+- id: active_seizure
+  severity: critical
+  category: neuro
+  any_of:
+    - "having a seizure"
+    - "is seizing"
+    - "convulsing"
+    - "fitting right now"
+    - "shaking uncontrollably"
+  script_id: emergency_seizure
+
+- id: suspected_overdose_or_poisoning
+  severity: critical
+  category: toxicology
+  any_of:
+    - "took too many pills"
+    - "overdose"
+    - "swallowed poison"
+    - "drank something poisonous"
+    - "took too much medication"
+    - "ate something poisonous"
+  script_id: emergency_overdose
+
+- id: obstetric_bleeding
+  severity: critical
+  category: obstetric
+  any_of:
+    - "pregnant and bleeding"
+    - "bleeding and im pregnant"
+    - "bleeding and i am pregnant"
+    - "heavy bleeding pregnant"
+  script_id: emergency_obstetric
+
+- id: infant_high_fever
+  severity: critical
+  category: pediatric
+  any_of:
+    - "baby has a fever"
+    - "infant has a fever"
+    - "newborn fever"
+    - "baby is burning up"
+    - "3 month old fever"
+    - "two month old fever"
+  script_id: emergency_infant_fever
+
+- id: major_trauma
+  severity: critical
+  category: trauma
+  any_of:
+    - "fell from height"
+    - "fell from the roof"
+    - "fell off the roof"
+    - "fell down the stairs"
+    - "car accident"
+    - "hit by a car"
+    - "road accident"
+    - "cant move my leg after falling"
+    - "cannot move my leg after falling"
+    - "severe injury"
+  script_id: emergency_trauma
+
+- id: severe_burns
+  severity: critical
+  category: trauma
+  any_of:
+    - "severe burn"
+    - "badly burned"
+    - "burn covering"
+    - "large burn"
+    - "burned my face"
+  script_id: emergency_burns
+
+- id: acute_abdomen
+  severity: critical
+  category: abdominal
+  any_of:
+    - "worst stomach pain"
+    - "abdomen is rigid"
+    - "stomach is rock hard"
+    - "severe abdominal pain"
+    - "unbearable stomach pain"
+  amplifiers:
+    - "fever"
+    - "vomiting"
+    - "cant move"
+  script_id: emergency_acute_abdomen
+
+- id: self_harm_risk
+  severity: critical
+  category: mental_health
+  any_of:
+    - "want to hurt myself"
+    - "want to end my life"
+    - "thinking about suicide"
+    - "dont want to live"
+    - "do not want to live"
+    - "kill myself"
+    - "better off dead"
+  script_id: emergency_self_harm

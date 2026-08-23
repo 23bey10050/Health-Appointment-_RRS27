@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 16px;">Your appointment needs to be rescheduled</h1>
+<p>Hi {{ patient_name }},</p>
+<p>Your doctor is unexpectedly unavailable on <strong>{{ start_at | format_dt }}</strong>, so this
+appointment has been cancelled. We're sorry for the inconvenience.</p>
+{% if alternatives %}
+<p>Here are some times that should work instead:</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  {% for alt in alternatives %}
+  <tr>
+    <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">
+      {{ alt.start_at | format_dt }} &mdash; {{ alt.doctor_name }}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<p style="margin-top:20px;">
+  <a href="{{ app_base_url }}/rebook?token={{ rebook_token }}"
+     style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;
+            padding:12px 20px;border-radius:8px;font-weight:600;">
+    Rebook in one click
+  </a>
+</p>
+{% else %}
+<p>Please visit your patient portal to choose a new time.</p>
+{% endif %}
+<p>{{ clinic_name }}</p>
+{% endblock %}

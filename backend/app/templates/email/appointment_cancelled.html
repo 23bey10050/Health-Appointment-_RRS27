@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 16px;">Appointment cancelled</h1>
+<p>Hi {{ patient_name }},</p>
+<p>Your appointment on <strong>{{ start_at | format_dt }}</strong> has been cancelled.</p>
+{% if reason %}<p style="color:#64748b;">Reason: {{ reason }}</p>{% endif %}
+<p>You can book a new appointment any time from your patient portal.</p>
+<p>{{ clinic_name }}</p>
+{% endblock %}

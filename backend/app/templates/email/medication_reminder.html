@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 16px;">Time for your medication</h1>
+<p>Hi {{ patient_name }},</p>
+<p style="background-color:#eff6ff;border-radius:8px;padding:16px;">
+  <strong style="font-size:16px;">{{ drug_name }}{% if strength %} {{ strength }}{% endif %}</strong><br>
+  {% if with_food %}{{ with_food }}{% endif %}
+  {% if instructions %}<br><span style="color:#475569;">{{ instructions }}</span>{% endif %}
+</p>
+<p>{{ clinic_name }}</p>
+{% endblock %}

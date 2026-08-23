@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 16px;">New appointment booked</h1>
+<p>Hi {{ doctor_name }},</p>
+<p>A new appointment has been booked with <strong>{{ patient_name }}</strong>:</p>
+<p style="background-color:#eff6ff;border-radius:8px;padding:16px;font-size:16px;font-weight:600;color:#1d4ed8;">
+  {{ start_at | format_dt }}
+</p>
+<p>The pre-visit summary will appear in your portal once it is ready.</p>
+<p>{{ clinic_name }}</p>
+{% endblock %}

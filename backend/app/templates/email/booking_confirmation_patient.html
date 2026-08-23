@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 16px;">Your appointment is confirmed</h1>
+<p>Hi {{ patient_name }},</p>
+<p>Your appointment with <strong>{{ doctor_name }}</strong> is confirmed for:</p>
+<p style="background-color:#eff6ff;border-radius:8px;padding:16px;font-size:16px;font-weight:600;color:#1d4ed8;">
+  {{ start_at | format_dt }}
+</p>
+<p>A calendar file is attached to this email so you can add it to your calendar in one tap.</p>
+<p>If you need to cancel or reschedule, you can do that any time from your patient portal.</p>
+<p>See you then,<br>{{ clinic_name }}</p>
+{% endblock %}

@@ -1,0 +1,185 @@
+# Symptom -> specialisation routing. Used by the voice agent to suggest a
+# specialisation before searching for a doctor. Not exhaustive -- general medicine
+# is always a safe fallback when nothing else matches clearly.
+
+- symptom_group: Chest and heart symptoms
+  keywords:
+    - chest pain
+    - chest tightness
+    - palpitations
+    - racing heart
+    - high blood pressure
+    - swelling in the legs
+    - shortness of breath on exertion
+  specialisation: Cardiology
+  notes: >
+    Route here for non-emergency cardiac concerns: known hypertension follow-up,
+    palpitations without red-flag features, murmur follow-up. Any chest pain with
+    red-flag features (radiation, sweating, breathlessness) is an emergency escalation,
+    not a routine Cardiology booking.
+
+- symptom_group: Children's health
+  keywords:
+    - child fever
+    - vaccination
+    - growth concern
+    - child not eating
+    - child rash
+    - developmental concern
+  specialisation: Pediatrics
+  notes: >
+    Any patient under 18 with a general medical concern routes to Pediatrics rather
+    than General Medicine, unless they specifically ask for a different specialist.
+
+- symptom_group: Skin, hair, and nail concerns
+  keywords:
+    - rash
+    - acne
+    - skin lesion
+    - mole check
+    - hair loss
+    - itching
+    - eczema
+    - psoriasis
+  specialisation: Dermatology
+
+- symptom_group: Bones, joints, and injuries
+  keywords:
+    - joint pain
+    - back pain
+    - sprain
+    - fracture
+    - knee pain
+    - shoulder pain
+    - arthritis
+    - sports injury
+  specialisation: Orthopedics
+  notes: >
+    Acute major trauma (suspected fracture with deformity, inability to bear weight
+    after a fall, any high-energy injury) is an emergency escalation, not a routine
+    Orthopedics booking.
+
+- symptom_group: Ear, nose, and throat
+  keywords:
+    - sore throat
+    - ear pain
+    - hearing loss
+    - sinus congestion
+    - nosebleed
+    - hoarse voice
+    - tonsillitis
+  specialisation: ENT
+
+- symptom_group: General and undifferentiated symptoms
+  keywords:
+    - fever
+    - fatigue
+    - cough
+    - cold
+    - body ache
+    - nausea
+    - general checkup
+    - diabetes follow-up
+    - thyroid
+  specialisation: General Medicine
+  notes: >
+    The default routing target when symptoms don't clearly point to a specialist,
+    or when the patient just wants a general checkup. General Medicine doctors
+    refer onward to a specialist themselves when needed.
+
+- symptom_group: Breathing and lung symptoms
+  keywords:
+    - persistent cough
+    - wheezing
+    - asthma
+    - breathlessness
+    - COPD
+    - chest infection
+    - coughing up phlegm
+  specialisation: General Medicine
+  notes: >
+    Chronic cough over three weeks, known asthma or COPD needing review, or
+    recurrent chest infections. Breathlessness at rest, inability to complete a
+    sentence, or an inhaler that has stopped working are emergencies, not bookings.
+
+- symptom_group: Digestive symptoms
+  keywords:
+    - stomach pain
+    - acidity
+    - reflux
+    - heartburn
+    - constipation
+    - diarrhoea
+    - bloating
+    - nausea after meals
+  specialisation: General Medicine
+  notes: >
+    Route most digestive complaints here first. Black stools, vomiting blood,
+    unintentional weight loss, or difficulty swallowing need urgent attention
+    rather than a routine slot.
+
+- symptom_group: Diabetes and hormonal
+  keywords:
+    - diabetes
+    - blood sugar
+    - thyroid
+    - excessive thirst
+    - unexplained weight loss
+    - excessive urination
+  specialisation: General Medicine
+  notes: >
+    Routine diabetes and thyroid reviews. Book a 30-minute chronic review slot and
+    ask them to bring home readings. Very high sugars with vomiting, drowsiness,
+    or rapid breathing suggest ketoacidosis and are an emergency.
+
+- symptom_group: Mental health
+  keywords:
+    - depression
+    - anxiety
+    - panic attacks
+    - not sleeping
+    - feeling low
+    - stress
+    - cannot cope
+  specialisation: General Medicine
+  notes: >
+    Offer a longer 45-minute slot and take the booking unhurriedly. Any mention of
+    self-harm or suicidal thinking goes to the crisis pathway immediately,
+    however calmly it is expressed.
+
+- symptom_group: Eye symptoms
+  keywords:
+    - blurred vision
+    - eye pain
+    - red eye
+    - watering eye
+    - floaters
+  specialisation: General Medicine
+  notes: >
+    Sudden vision loss, a painful red eye with vision change, or flashes with a
+    curtain across the vision are emergencies. Gradual blurring is routine.
+
+- symptom_group: Urinary and kidney
+  keywords:
+    - burning urine
+    - frequent urination
+    - blood in urine
+    - kidney stone
+    - flank pain
+  specialisation: General Medicine
+  notes: >
+    Simple urinary infections are routine. Fever with flank pain, or inability to
+    pass urine at all, needs urgent assessment.
+
+- symptom_group: Women's health
+  keywords:
+    - pregnancy
+    - antenatal
+    - period problems
+    - menstrual pain
+    - contraception
+    - menopause
+  specialisation: General Medicine
+  notes: >
+    Routine antenatal and gynaecological bookings. Bleeding in pregnancy, severe
+    abdominal pain, or reduced fetal movements are emergencies.

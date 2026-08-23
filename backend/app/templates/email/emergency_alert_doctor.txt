@@ -1,0 +1,15 @@
+URGENT -- requires immediate attention
+
+Hi {{ doctor_name }},
+
+The voice agent escalated a patient conversation to you as on-call. An urgent appointment has
+been created at {{ hospital_name }}.
+
+Patient: {{ patient_name }}
+Category: {{ category }}
+Summary: {{ summary }}
+
+Open the patient's record in your portal for the full decision-support brief. This is
+AI-generated decision support, not a diagnosis -- clinical judgment required.
+
+{{ clinic_name }}

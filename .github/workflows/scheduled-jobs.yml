@@ -1,0 +1,72 @@
+# Replaces Celery beat on hosting tiers with no background worker.
+#
+# Two jobs it does at once:
+#   1. Runs the scheduled work (hold expiry, email dispatch, reminders, purge).
+#   2. Keeps the free-tier web service warm. Render spins a free service down
+#      after 15 minutes idle and cold-starts in ~50s, which for a voice agent is
+#      the difference between "instant" and "broken". The 10-minute tick prevents
+#      that as a side effect.
+#
+# Required repository secrets:
+#   API_BASE_URL  e.g. https://clinic-api.onrender.com
+#   JOBS_SECRET   must match the JOBS_SECRET env var on the API service
+#
+# Caveat, accepted: GitHub's cron is best-effort and can fire several minutes
+# late under load. That is fine here -- enqueue_email is idempotent on
+# idempotency_key and the reminder windows deliberately overlap, so a late or
+# repeated run cannot double-send.
+
+name: Scheduled jobs
+
+on:
+  schedule:
+    # Every 10 minutes: the frequent work + keep-alive.
+    - cron: "*/10 * * * *"
+    # Hourly: appointment reminders (24h and 2h windows).
+    - cron: "5 * * * *"
+    # Daily 03:00 UTC: audio/transcript retention purge.
+    - cron: "0 3 * * *"
+  workflow_dispatch: # manual trigger for testing
+
+concurrency:
+  # Never overlap runs -- two ticks at once would race on the same rows.
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    name: Frequent jobs + keep-alive
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run tick
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST "${{ secrets.API_BASE_URL }}/api/v1/jobs/tick" \
+            -H "X-Jobs-Secret: ${{ secrets.JOBS_SECRET }}"
+
+  hourly:
+    name: Appointment + medication reminders
+    if: github.event.schedule == '5 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appointment reminders
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST "${{ secrets.API_BASE_URL }}/api/v1/jobs/appointment-reminders" \
+            -H "X-Jobs-Secret: ${{ secrets.JOBS_SECRET }}"
+      - name: Medication reminders
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST "${{ secrets.API_BASE_URL }}/api/v1/jobs/medication-reminders" \
+            -H "X-Jobs-Secret: ${{ secrets.JOBS_SECRET }}"
+
+  daily:
+    name: Retention purge
+    if: github.event.schedule == '0 3 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Purge expired audio/transcripts
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 \
+            -X POST "${{ secrets.API_BASE_URL }}/api/v1/jobs/purge-expired-audio" \
+            -H "X-Jobs-Secret: ${{ secrets.JOBS_SECRET }}"

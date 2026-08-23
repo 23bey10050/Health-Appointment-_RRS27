@@ -1,0 +1,12 @@
+Hi {{ patient_name }},
+
+Your appointment with {{ doctor_name }} is confirmed for:
+
+  {{ start_at | format_dt }}
+
+A calendar file (.ics) is attached to this email.
+
+If you need to cancel or reschedule, you can do that any time from your patient portal.
+
+See you then,
+{{ clinic_name }}

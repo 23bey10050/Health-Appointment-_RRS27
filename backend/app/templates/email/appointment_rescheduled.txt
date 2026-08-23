@@ -1,0 +1,9 @@
+Hi {{ patient_name }},
+
+Your appointment has been moved to:
+
+  {{ new_start_at | format_dt }}
+
+An updated calendar file is attached.
+
+{{ clinic_name }}
