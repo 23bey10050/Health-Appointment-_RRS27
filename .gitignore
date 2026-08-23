@@ -1,26 +1,39 @@
+# Env
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node
 node_modules/
 dist/
-coverage/
-*.tsbuildinfo
+.vite/
 
-# Real secrets never leave this machine. The next line makes one deliberate exception:
-# .env.local is a placeholder file, committed so anyone cloning this repo can see exactly which
-# variables they need and where to get each key.
-.env
-.env.*
-!.env.local
+# Models (downloaded weights)
+infra/models/*
+!infra/models/.gitkeep
 
-# Project notes and plans stay local by owner's instruction.
-*.md
+# Docker
+*.pid
 
-*.log
-npm-debug.log*
+# IDE
+.vscode/
+.idea/
+
+# OS
 .DS_Store
 Thumbs.db
-.idea/
-.vscode/
 
-# Playwright's own run output - screenshots, traces, the HTML report - regenerated every run.
-apps/web/test-results/
-apps/web/playwright-report/
-apps/web/blob-report/
+# Logs
+*.log
