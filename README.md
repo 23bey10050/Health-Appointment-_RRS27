@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="https://via.placeholder.com/150x150/2563eb/ffffff?text=City+Care+Clinic" alt="City Care Clinic Logo" width="120" height="120" style="border-radius: 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.1); margin-bottom: 20px;">
-  
-  <h1 align="center">City Care Clinic: AI Healthcare Manager</h1>
+  <a href="https://git.io/typing-svg">
+    <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=800&size=42&pause=1000&color=3B82F6&center=true&vCenter=true&width=800&height=80&lines=City+Care+Clinic;AI-Driven+Healthcare;Intelligent+Voice+Agent" alt="Typing SVG" />
+  </a>
   <p align="center">
     <strong>A modern healthcare app with a real-time AI voice assistant, clean dashboards, and helpful AI tips for doctors.</strong>
   </p>
@@ -26,28 +26,36 @@ We built the interface using a modern "Glassmorphism" style. This makes the dash
 
 ## Screenshots
 
-> **Note:** Replace the placeholder URLs below with your actual images or GIFs.
-
 <div align="center">
   <table style="width: 100%; text-align: center;">
     <tr>
       <td width="50%">
+        <b>Platform Landing Page</b><br/><br/>
+        <img src="docs/Screenshot%202026-08-24%20043645.png" alt="Landing Page Hero" style="border-radius:10px;">
+      </td>
+      <td width="50%">
+        <b>Role Selection & Booking Guide</b><br/><br/>
+        <img src="docs/Screenshot%202026-08-24%20043638.png" alt="Portal Selection" style="border-radius:10px;">
+      </td>
+    </tr>
+    <tr>
+      <td width="50%">
         <b>Patient Portal & Voice Agent</b><br/><br/>
-        <img src="https://via.placeholder.com/600x400/eff6ff/1e293b?text=[Patient+Portal+Screenshot]" alt="Patient Portal" style="border-radius:10px;">
+        <img src="docs/Screenshot%202026-08-24%20043309.png" alt="Patient Portal" style="border-radius:10px;">
       </td>
       <td width="50%">
         <b>Doctor Dashboard & Emergency Queue</b><br/><br/>
-        <img src="https://via.placeholder.com/600x400/eff6ff/1e293b?text=[Doctor+Dashboard+Screenshot]" alt="Doctor Dashboard" style="border-radius:10px;">
+        <img src="docs/Screenshot%202026-08-24%20043545.png" alt="Doctor Dashboard" style="border-radius:10px;">
       </td>
     </tr>
     <tr>
       <td width="50%">
         <b>Admin Control Panel</b><br/><br/>
-        <img src="https://via.placeholder.com/600x400/eff6ff/1e293b?text=[Admin+Panel+Screenshot]" alt="Admin Panel" style="border-radius:10px;">
+        <img src="docs/Screenshot%202026-08-24%20043500.png" alt="Admin Panel" style="border-radius:10px;">
       </td>
       <td width="50%">
-        <b>Voice Assistant Animation</b><br/><br/>
-        <img src="https://via.placeholder.com/600x400/eff6ff/1e293b?text=[Add+GIF+Here]" alt="Voice Agent Animation" style="border-radius:10px;">
+        <b>Admin LLM Status Monitor</b><br/><br/>
+        <img src="docs/Screenshot%202026-08-24%20043509.png" alt="Admin LLM Monitor" style="border-radius:10px;">
       </td>
     </tr>
   </table>
