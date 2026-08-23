@@ -12,7 +12,13 @@ from app.models.doctor import DoctorProfile
 from app.models.encounter import AISummary, Encounter
 from app.models.enums import SummaryKind, UserRole
 from app.models.user import User
-from app.schemas.appointment import AppointmentOut, CancelRequest, HoldRequest, RescheduleRequest
+from app.schemas.appointment import (
+    AppointmentOut,
+    CancelRequest,
+    ConfirmRequest,
+    HoldRequest,
+    RescheduleRequest,
+)
 from app.schemas.encounter import EncounterOut
 from app.schemas.summary import SummaryOut
 from app.services.booking import cancel_appointment, confirm_booking, hold_slot, reschedule_appointment
@@ -47,10 +53,14 @@ async def hold(
 @router.post("/{appointment_id}/confirm", response_model=AppointmentOut)
 async def confirm(
     appointment_id: uuid.UUID,
+    payload: ConfirmRequest | None = None,
     current: CurrentUser = Depends(require_role(UserRole.patient)),
     session: AsyncSession = Depends(get_session),
 ) -> Appointment:
-    return await confirm_booking(session, appointment_id, current.id)
+    intake = payload.symptom_intake if payload else None
+    return await confirm_booking(
+        session, appointment_id, current.id, reason_text=intake.to_reason_text() if intake else None
+    )
 
 
 def _with_names(appt: Appointment, doctor_name: str, patient_name: str) -> AppointmentOut:

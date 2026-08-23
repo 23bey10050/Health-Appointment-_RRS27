@@ -116,8 +116,18 @@ async def _enqueue_booking_confirmed_emails(session: AsyncSession, appt: Appoint
         )
 
 
-async def confirm_booking(session: AsyncSession, appointment_id: uuid.UUID, patient_id: uuid.UUID) -> Appointment:
-    """Idempotent: confirming an already-confirmed hold owned by this patient is a no-op success."""
+async def confirm_booking(
+    session: AsyncSession,
+    appointment_id: uuid.UUID,
+    patient_id: uuid.UUID,
+    reason_text: str | None = None,
+) -> Appointment:
+    """Idempotent: confirming an already-confirmed hold owned by this patient is a no-op success.
+
+    `reason_text` is the flattened symptom form from the web booking flow. The
+    voice path leaves it None -- it has a full transcript instead, which
+    generate_pre_visit_summary prefers.
+    """
     async with await start_clean_transaction(session):
         appt = await session.get(Appointment, appointment_id, with_for_update=True)
         if appt is None:
@@ -130,6 +140,11 @@ async def confirm_booking(session: AsyncSession, appointment_id: uuid.UUID, pati
 
         if appt.status != AppointmentStatus.held:
             raise ConflictError("This hold is no longer active")
+
+        # Written before the status flips, so the row is never observably
+        # confirmed without the symptoms the doctor's pre-visit panel needs.
+        if reason_text:
+            appt.reason_text = reason_text
 
         now = datetime.now(UTC)
         if appt.hold_expires_at is not None and appt.hold_expires_at < now:

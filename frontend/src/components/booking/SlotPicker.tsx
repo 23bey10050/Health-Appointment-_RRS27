@@ -36,6 +36,16 @@ export function SlotPicker({
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
+  // Symptom intake, collected while the slot is held. The doctor's pre-visit
+  // summary is generated from this, so it is gathered before confirming rather
+  // than afterwards.
+  const [symptoms, setSymptoms] = useState("");
+  const [duration, setDuration] = useState("");
+  const [severity, setSeverity] = useState("");
+  const [existingConditions, setExistingConditions] = useState("");
+  const [currentMedications, setCurrentMedications] = useState("");
+  const [allergies, setAllergies] = useState("");
+
   useEffect(() => {
     const from = new Date();
     const to = new Date();
@@ -80,10 +90,26 @@ export function SlotPicker({
 
   async function handleConfirm() {
     if (!held) return;
+    if (symptoms.trim().length < 3) {
+      setError("Please describe your symptoms so the doctor can prepare.");
+      return;
+    }
     setConfirming(true);
     setError(null);
     try {
-      const confirmed = await apiFetch<Appointment>(`/api/v1/appointments/${held.id}/confirm`, { method: "POST" });
+      const confirmed = await apiFetch<Appointment>(`/api/v1/appointments/${held.id}/confirm`, {
+        method: "POST",
+        body: JSON.stringify({
+          symptom_intake: {
+            symptoms: symptoms.trim(),
+            duration: duration.trim() || null,
+            severity: severity ? Number(severity) : null,
+            existing_conditions: existingConditions.trim() || null,
+            current_medications: currentMedications.trim() || null,
+            allergies: allergies.trim() || null,
+          },
+        }),
+      });
       onBooked(confirmed);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not confirm the booking.");
@@ -117,8 +143,107 @@ export function SlotPicker({
         <p className="mt-1 text-sm text-slate-500">
           Slot held for <span className="font-mono font-medium text-brand-700">{minutes}:{seconds}</span>
         </p>
-        {error && <p className="mt-2 text-sm text-emergency-600">{error}</p>}
-        <div className="mt-4 flex gap-3">
+
+        <div className="mt-5 border-t border-brand-200 pt-5">
+          <h3 className="text-sm font-semibold text-slate-900">Tell the doctor why you are coming in</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            This is summarised for your doctor before the visit, so they can prepare. It is not a diagnosis
+            and it is not seen by anyone else.
+          </p>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700" htmlFor="symptoms">
+                What is bothering you? <span className="text-emergency-600">*</span>
+              </label>
+              <textarea
+                id="symptoms"
+                required
+                rows={3}
+                value={symptoms}
+                onChange={(e) => setSymptoms(e.target.value)}
+                placeholder="Describe your symptoms in your own words"
+                className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700" htmlFor="duration">
+                  How long have you had this?
+                </label>
+                <input
+                  id="duration"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  placeholder="e.g. 3 days"
+                  className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700" htmlFor="severity">
+                  How bad is it, 1 to 10?
+                </label>
+                <select
+                  id="severity"
+                  value={severity}
+                  onChange={(e) => setSeverity(e.target.value)}
+                  className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                >
+                  <option value="">Prefer not to say</option>
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700" htmlFor="conditions">
+                Any ongoing conditions?
+              </label>
+              <input
+                id="conditions"
+                value={existingConditions}
+                onChange={(e) => setExistingConditions(e.target.value)}
+                placeholder="e.g. diabetes, asthma"
+                className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700" htmlFor="medications">
+                  Medicines you take now
+                </label>
+                <input
+                  id="medications"
+                  value={currentMedications}
+                  onChange={(e) => setCurrentMedications(e.target.value)}
+                  placeholder="Include doses if you know them"
+                  className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700" htmlFor="allergies">
+                  Allergies
+                </label>
+                <input
+                  id="allergies"
+                  value={allergies}
+                  onChange={(e) => setAllergies(e.target.value)}
+                  placeholder="Medicines, food, anything else"
+                  className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {error && <p className="mt-3 text-sm text-emergency-600">{error}</p>}
+        <div className="mt-5 flex gap-3">
           <button
             onClick={handleConfirm}
             disabled={confirming}

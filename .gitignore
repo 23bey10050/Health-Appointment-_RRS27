@@ -40,3 +40,6 @@ Thumbs.db
 
 # TypeScript incremental build cache -- regenerated on every build
 *.tsbuildinfo
+
+# Internal planning docs -- not part of the deliverable
+IMPLEMENTATION plan.md
